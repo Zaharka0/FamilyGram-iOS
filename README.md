@@ -8,7 +8,7 @@
 
 - Название FamilyGram на домашнем экране, в том числе при русской локализации.
 - Основная иконка «Сердце FamilyGram» и пять фотоиконок, доступных без Premium через **Настройки → Оформление → Иконка приложения**. Превью и системная иконка используют одно изображение.
-- Воспроизводимая подготовка официального исходного кода по точному commit SHA из `upstream.json`; все изменения публикуются в `scripts/patch_source.py`.
+- Воспроизводимая подготовка официального исходного кода по точному commit SHA из `upstream.json`; все изменения публикуются в `scripts/patch_source.py` и `scripts/patch_rules.py`.
 - Отдельный режим сборки для последующей подписи AltStore, без сертификатов Apple, Watch-приложения и расширений. Уведомления, виджеты, Siri, iCloud и расширение «Поделиться» в этом первом варианте не поддерживаются/не гарантируются.
 - Проверка, что IPA содержит arm64-приложение для настоящего iPhone, правильное название, bundle ID и пять альтернативных иконок.
 - SHA-256 и JSON с происхождением сборки рядом с IPA.
@@ -40,6 +40,7 @@ python3 scripts/configure.py
 python3 scripts/preflight.py
 python3 scripts/checkout.py
 python3 scripts/patch_source.py
+python3 scripts/patch_rules.py
 python3 scripts/icons.py
 python3 scripts/build.py --build-number 1
 ```
@@ -56,7 +57,7 @@ python3 -m unittest discover -s tests -v
 
 `Source and packaging checks` дополнительно получает закреплённые файлы Telegram, проверяет применимость патча и размеры/ресурсы шести иконок. Это **не компиляция iOS**. `iOS IPA (AltStore)` вручную запускает полный arm64 release build и только после успеха загружает IPA.
 
-Исходники Telegram скачиваются при подготовке проекта, а не копируются многогигабайтным деревом в этот репозиторий. `upstream.json` фиксирует источник и инструменты; `scripts/patch_source.py` — полный опубликованный набор изменений. `icons.json` фиксирует существующие изображения из публичного FamilyGram-Android по commit SHA и SHA-256; новые личные оригиналы фотографий здесь не публикуются. Фотоиллюстрации ранее подготовлены из пяти фотографий пользователя, шестая иконка создана специально для FamilyGram. При распространении бинарной сборки сохраняйте соответствующий исходный commit и опубликованные изменения.
+Исходники Telegram скачиваются при подготовке проекта, а не копируются многогигабайтным деревом в этот репозиторий. `upstream.json` фиксирует источник и инструменты; `scripts/patch_source.py` и `scripts/patch_rules.py` — полный опубликованный набор изменений. `icons.json` фиксирует существующие изображения из публичного FamilyGram-Android по commit SHA и SHA-256; новые личные оригиналы фотографий здесь не публикуются. Фотоиллюстрации ранее подготовлены из пяти фотографий пользователя, шестая иконка создана специально для FamilyGram. При распространении бинарной сборки сохраняйте соответствующий исходный commit и опубликованные изменения.
 
 Новые скрипты и изменения распространяются по GPL-2.0-or-later; Telegram и его зависимости сохраняют собственные лицензии. FamilyGram не является официальным приложением Telegram.
 
@@ -65,3 +66,7 @@ python3 -m unittest discover -s tests -v
 После первого успешного запуска на iPhone: отдельные настройки FamilyGram, перенос семейного протокола `fg1` и тест с Android-клиентом, затем списки/календарь/закладки/объятия. Наличие этих функций в Android-версии не означает их наличие в данном iOS-проекте. Поддержка произвольных Android-плагинов на iOS не обещается.
 
 Официальные источники: [Telegram iOS](https://github.com/TelegramMessenger/Telegram-iOS), [AltStore Classic](https://faq.altstore.io/altstore-classic/your-altstore), [GitHub Xcode 27 runner](https://github.com/actions/runner-images/blob/main/images/macos/xcode-27-arm64-Readme.md).
+
+## Исправление первой сборки
+
+Первый запуск IPA останавливался на анализе Bazel: `Building for device, but no provisioning_profile attribute was set`. `disable_legacy_signing` отключал подпись, но правило `ios_application` отдельно требовало встраивания профиля. `patch_rules.py` пропускает этот шаг только при одновременных `familygram.altstore_unsigned`, `disable_legacy_signing` и отсутствии профиля. Обычные device builds по-прежнему требуют профиль; существующие профили сохраняются. Для исправления нужен новый **Run workflow** из текущего `main`: **Re-run jobs** старого запуска использует старый commit и не получит исправление.

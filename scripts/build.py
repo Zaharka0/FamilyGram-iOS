@@ -7,6 +7,7 @@ from pathlib import Path
 from common import ROOT, run
 from preflight import check
 from package_ipa import package
+from patch_rules import GUARD, RULES_PATH, RULE_FILE
 
 
 def build(source, config, output, number):
@@ -21,6 +22,8 @@ def build(source, config, output, number):
         raise ValueError('Run icons.py before building')
     if number < 1:
         raise ValueError('Build number must be positive')
+    if GUARD not in (source / RULES_PATH / RULE_FILE).read_text():
+        raise ValueError('Run patch_rules.py before building the unsigned device IPA')
     configuration = json.loads(config.read_text())
     # A separate artifacts path avoids accidentally packaging an older IPA.
     artifacts = ROOT / 'build' / f'artifacts-{number}'

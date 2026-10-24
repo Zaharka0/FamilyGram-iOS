@@ -19,7 +19,7 @@ def checkout(destination, submodules=True, sparse=False):
         run(['git', 'fetch', '--depth=1', '--filter=blob:none', 'origin', MANIFEST['commit']], cwd=destination)
         if sparse:
             run(['git', 'sparse-checkout', 'init', '--no-cone'], cwd=destination)
-            run(['git', 'sparse-checkout', 'set', '/versions.json', '/Telegram/BUILD',
+            run(['git', 'sparse-checkout', 'set', '/.gitmodules', '/versions.json', '/Telegram/BUILD',
                  '/Telegram/Telegram-iOS/*.lproj/InfoPlist.strings',
                  '/submodules/TelegramUI/Sources/AppDelegate.swift',
                  '/submodules/SettingsUI/Sources/Themes/ThemeSettingsAppIconItem.swift',

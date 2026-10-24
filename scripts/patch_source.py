@@ -51,6 +51,7 @@ def patched_files(source):
         bazel_command_line.common_build_args += [
             '--//Telegram:disableExtensions',
             '--features=disable_legacy_signing',
+            '--features=familygram.altstore_unsigned',
         ]
 ''')
     make = replace_once(make, "    add_project_and_build_common_arguments(buildParser)", """    buildParser.add_argument('--familygramUnsigned', action='store_true', default=False,

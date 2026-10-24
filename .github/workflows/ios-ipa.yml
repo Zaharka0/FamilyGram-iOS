@@ -37,7 +37,9 @@ jobs:
       - name: Fetch pinned Telegram source and its submodules
         run: python3 scripts/checkout.py
       - name: Apply FamilyGram branding and AltStore build mode
-        run: python3 scripts/patch_source.py
+        run: |
+          python3 scripts/patch_source.py
+          python3 scripts/patch_rules.py
       - name: Generate six iOS icon choices from verified artwork
         run: python3 scripts/icons.py
       - name: Build arm64 release and package for AltStore

@@ -19,6 +19,8 @@ jobs:
       - name: Check patch anchors against pinned official source
         run: |
           python3 scripts/checkout.py --no-submodules --sparse-check
+          git -C source submodule update --init --depth=1 build-system/bazel-rules/rules_apple
           python3 scripts/patch_source.py
+          python3 scripts/patch_rules.py
           python3 scripts/icons.py
           python3 scripts/check_prepared.py

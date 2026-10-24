@@ -12,6 +12,7 @@ from unittest.mock import patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
 from common import replace_once
+from patch_rules import GUARD, patched_rules
 from configure import configuration
 from icons import artwork, generate
 from verify_ipa import device_arm64, inspect
@@ -40,6 +41,35 @@ class BuildToolsTests(unittest.TestCase):
         for value in ('absent', 'anchor anchor'):
             with self.assertRaises(ValueError):
                 replace_once(value, 'anchor', 'new')
+
+    def test_profile_embedding_requires_explicit_unsigned_mode(self):
+        from types import SimpleNamespace
+        # Execute the actual Starlark/Python-compatible condition used by the patch.
+        condition = GUARD.split('        processor_partials.append(', 1)[0]
+        condition += '        embed_profile = True\n'
+        cases = [
+            (True, None, [], True),
+            (True, None, ['disable_legacy_signing'], True),
+            (True, None, ['familygram.altstore_unsigned'], True),
+            (True, None, ['disable_legacy_signing', 'familygram.altstore_unsigned'], False),
+            (True, 'real-profile', ['disable_legacy_signing', 'familygram.altstore_unsigned'], True),
+            (True, 'real-profile', [], True),
+            (False, None, [], False),
+        ]
+        for device, profile, features, expected in cases:
+            scope = dict(platform_prerequisites=SimpleNamespace(platform=SimpleNamespace(is_device=device)),
+                         provisioning_profile=profile, features=features, embed_profile=False)
+            exec('if True:\n' + condition, scope)
+            self.assertEqual(scope['embed_profile'], expected)
+
+    def test_only_main_application_rule_changes(self):
+        anchor = '    if platform_prerequisites.platform.is_device:\n        processor_partials.append(\n            partials.provisioning_profile_partial('
+        original = 'def _ios_application_impl(ctx):\n' + anchor + '))\n\ndef _ios_extension_impl(ctx):\n' + anchor + '))\n'
+        result = patched_rules(original)
+        self.assertIn(GUARD, result)
+        self.assertEqual(result.split('def _ios_extension_impl', 1)[1], original.split('def _ios_extension_impl', 1)[1])
+        with self.assertRaises(ValueError):
+            patched_rules(original.replace(anchor, 'changed upstream'))
 
     def test_machine_code_rejects_simulator_and_encrypted_binary(self):
         device_arm64(binary())

@@ -4,6 +4,7 @@ import json
 from pathlib import Path
 from PIL import Image
 from common import ROOT
+from patch_rules import GUARD, RULES_PATH, RULE_FILE
 
 
 def check(source):
@@ -18,6 +19,8 @@ def check(source):
     assert section.count('isDefault: true') == 1 and 'isPremium: true' not in section
     make = (source / 'build-system/Make/Make.py').read_text()
     ast.parse(make)
+    assert GUARD in (source / RULES_PATH / RULE_FILE).read_text()
+    assert '--features=familygram.altstore_unsigned' in make
     assert '--familygramUnsigned' in make and '--features=disable_legacy_signing' in make
     base = source / 'Telegram/Telegram-iOS'
     for i in range(1, 7):
