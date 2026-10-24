@@ -1,0 +1,36 @@
+{
+  "source_repository": "Zaharka0/FamilyGram-Android",
+  "source_commit": "0124c31333d96f88b630b3102e999c3dc5b771dc",
+  "icons": [
+    {
+      "index": 1,
+      "path": "TMessagesProj/src/main/res/mipmap-nodpi/family_photo_1.jpg",
+      "sha256": "8ce1e8ab95ac8493cfa50e04970ce1d6f87531f455c9cd58caedfb0b6726087e"
+    },
+    {
+      "index": 2,
+      "path": "TMessagesProj/src/main/res/mipmap-nodpi/family_photo_2.jpg",
+      "sha256": "160fd3195c94396bfd8de7fe91103899d67c6cf8352b7dbf8fa6774ccc64bf84"
+    },
+    {
+      "index": 3,
+      "path": "TMessagesProj/src/main/res/mipmap-nodpi/family_photo_3.jpg",
+      "sha256": "c392a4450a030ba1a17b8497dfda3fd6e1385376818f6512fd1e698ec7a8e196"
+    },
+    {
+      "index": 4,
+      "path": "TMessagesProj/src/main/res/mipmap-nodpi/family_photo_4.jpg",
+      "sha256": "ab0d8751cd4bcf9251e013f276c9b8edc108cb89c1dec54b91b1245d6d7f2f11"
+    },
+    {
+      "index": 5,
+      "path": "TMessagesProj/src/main/res/mipmap-nodpi/family_photo_5.jpg",
+      "sha256": "7a947372cc628212f687500059e0ad7c096b165d0fbd360629f27d7f1aefc5ca"
+    },
+    {
+      "index": 6,
+      "path": "TMessagesProj/src/main/res/mipmap-nodpi/family_photo_6.jpg",
+      "sha256": "cebc4a8905a35126db3e9aab4f53337f2b8a9b970aee393aed2293747c2eee2d"
+    }
+  ]
+}

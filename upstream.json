@@ -1,0 +1,9 @@
+{
+  "repository": "https://github.com/TelegramMessenger/Telegram-iOS.git",
+  "commit": "fb0e62ba8a147f0821da6aa63c09da7d79a10111",
+  "app": "13.1.1",
+  "xcode": "27.1",
+  "macos": "27",
+  "minimum_ios": "15.0",
+  "checked_at": "2026-10-24"
+}
