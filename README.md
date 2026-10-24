@@ -70,3 +70,22 @@ python3 -m unittest discover -s tests -v
 ## Исправление первой сборки
 
 Первый запуск IPA останавливался на анализе Bazel: `Building for device, but no provisioning_profile attribute was set`. `disable_legacy_signing` отключал подпись, но правило `ios_application` отдельно требовало встраивания профиля. `patch_rules.py` пропускает этот шаг только при одновременных `familygram.altstore_unsigned`, `disable_legacy_signing` и отсутствии профиля. Обычные device builds по-прежнему требуют профиль; существующие профили сохраняются. Для исправления нужен новый **Run workflow** из текущего `main`: **Re-run jobs** старого запуска использует старый commit и не получит исправление.
+
+## ZIP с .app для Appetize / iOS Simulator
+
+Для облачного симулятора используйте **Actions → iOS Simulator (.app ZIP) → Run workflow → main**. Используются те же секреты `API_ID` и `API_HASH`. Этот workflow компилирует `release_sim_arm64` для iOS Simulator, а не переупаковывает device IPA.
+
+После успешной сборки:
+
+1. Скачайте артефакт **FamilyGram-iOS-Simulator-arm64**.
+2. Распакуйте внешний ZIP, скачанный с GitHub Actions.
+3. Найдите внутри **`FamilyGram-Simulator-arm64.zip`** и загрузите **его** в форму Appetize. Внутри него `FamilyGram.app` расположен прямо в корне, без папки `Payload`.
+4. Выберите среду **ARM64 iOS Simulator**, с iOS не ниже минимальной версии приложения. AltStore и Apple ID для этой сборки не нужны.
+
+Локально на подходящем Mac, после обычной подготовки исходников:
+
+```sh
+python3 scripts/build.py --target simulator --build-number 1
+```
+
+Рядом с архивом создаются SHA-256 и JSON с данными сборки. Проверяется `iPhoneSimulator` в Info.plist и платформа **7 / IOSSIMULATOR** в Mach-O: одной архитектуры arm64 недостаточно. Device IPA по-прежнему проверяется как платформа **2 / IOS**. Эти форматы не взаимозаменяемы. Проверки упаковки не подтверждают успешный запуск/вход в Telegram в облачном сервисе; это нужно проверить после первой полной сборки.

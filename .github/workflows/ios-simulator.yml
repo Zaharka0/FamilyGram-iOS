@@ -1,0 +1,58 @@
+name: iOS Simulator (.app ZIP)
+on:
+  workflow_dispatch:
+    inputs:
+      bundle_id:
+        description: Stable app identifier (keep it unchanged for updates)
+        required: true
+        default: org.familygram.ios
+        type: string
+permissions:
+  contents: read
+concurrency:
+  group: familygram-ios-simulator-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  build:
+    runs-on: xcode-27
+    timeout-minutes: 360
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_27.1.app/Contents/Developer
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Validate private Telegram API configuration
+        env:
+          API_ID: ${{ secrets.API_ID }}
+          API_HASH: ${{ secrets.API_HASH }}
+          FAMILYGRAM_BUNDLE_ID: ${{ inputs.bundle_id }}
+        run: python3 scripts/configure.py --bundle-id "$FAMILYGRAM_BUNDLE_ID"
+      - name: Check macOS, Xcode and disk space
+        run: python3 scripts/preflight.py
+      - run: python3 -m pip install -r requirements.txt
+      - name: Fetch pinned Telegram source and its submodules
+        run: python3 scripts/checkout.py
+      - name: Apply FamilyGram branding and unsigned build mode
+        run: |
+          python3 scripts/patch_source.py
+          python3 scripts/patch_rules.py
+      - name: Generate six iOS icon choices from verified artwork
+        run: python3 scripts/icons.py
+      - name: Build arm64 iOS Simulator app and package ZIP
+        env:
+          FAMILYGRAM_BUILD_NUMBER: ${{ github.run_number }}
+        run: python3 scripts/build.py --target simulator --build-number "$FAMILYGRAM_BUILD_NUMBER"
+      - name: Upload simulator app ZIP and checksum
+        uses: actions/upload-artifact@v4
+        with:
+          name: FamilyGram-iOS-Simulator-arm64
+          path: dist/
+          if-no-files-found: error
+          retention-days: 14
+      - name: Remove private configuration
+        if: always()
+        run: python3 -c "from pathlib import Path; Path('build/configuration.json').unlink(missing_ok=True)"

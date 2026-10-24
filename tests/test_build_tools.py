@@ -77,17 +77,18 @@ class BuildToolsTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 device_arm64(data)
 
-    def make_ipa(self, path, platform=2, name='FamilyGram', extensions=False, unsafe=False):
+    def make_ipa(self, path, platform=2, name='FamilyGram', extensions=False, unsafe=False, simulator=False, app_zip=False):
         icons = {'CFBundlePrimaryIcon': {'CFBundleIconName': 'FamilyGram'},
                  'CFBundleAlternateIcons': {f'Family{i}': {'CFBundleIconFiles': [f'Family{i}']} for i in range(1, 6)}}
         info = dict(CFBundleIdentifier='org.familygram.ios', CFBundleDisplayName=name,
-                    CFBundleExecutable='Telegram', CFBundleSupportedPlatforms=['iPhoneOS'],
+                    CFBundleExecutable='Telegram', CFBundleSupportedPlatforms=['iPhoneSimulator' if simulator else 'iPhoneOS'],
                     CFBundleIcons=icons, **{'CFBundleIcons~ipad': icons})
+        root = 'FamilyGram.app/' if app_zip else 'Payload/Telegram.app/'
         with zipfile.ZipFile(path, 'w') as archive:
-            archive.writestr('Payload/Telegram.app/Info.plist', plistlib.dumps(info))
-            archive.writestr('Payload/Telegram.app/Telegram', binary(platform))
+            archive.writestr(root + 'Info.plist', plistlib.dumps(info))
+            archive.writestr(root + 'Telegram', binary(platform))
             if extensions:
-                archive.writestr('Payload/Telegram.app/PlugIns/Widget.appex/Info.plist', b'')
+                archive.writestr(root + 'PlugIns/Widget.appex/Info.plist', b'')
             if unsafe:
                 archive.writestr('../outside', b'')
 
@@ -100,6 +101,23 @@ class BuildToolsTests(unittest.TestCase):
                 self.make_ipa(path, **params)
                 with self.assertRaises(ValueError):
                     inspect(path)
+
+    def test_simulator_zip_requires_root_app_and_simulator_platform(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / 'simulator.zip'
+            self.make_ipa(path, platform=7, simulator=True, app_zip=True)
+            result = inspect(path, simulator=True, app_zip=True)
+            self.assertTrue(result['simulator_arm64'])
+            self.assertFalse(result['device_arm64'])
+            with self.assertRaises(ValueError):
+                inspect(path)  # Simulator ZIP cannot be installed as device IPA.
+            self.make_ipa(path, platform=2, simulator=True, app_zip=True)
+            with self.assertRaises(ValueError):
+                inspect(path, simulator=True, app_zip=True)  # Renaming cannot convert binaries.
+            self.make_ipa(path, platform=7, simulator=True)
+            with self.assertRaises(ValueError):
+                inspect(path, simulator=True, app_zip=True)  # Payload wrapper is not the upload ZIP.
+            self.assertTrue(inspect(path, simulator=True)['simulator_arm64'])
 
     def test_icons_verify_checksums_before_conversion(self):
         with tempfile.TemporaryDirectory() as temporary:
