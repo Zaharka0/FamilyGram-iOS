@@ -46,6 +46,7 @@ final class FGVoice {
     private let store: FGStore
     private lazy var fetch = FGMediaFetch(store)
     private var state: Disposable?
+    private var playlistState: Disposable?
     private var queue: [FGHistory] = []
     private var peer: Int64 = 0
     private var current: Int32 = 0
@@ -53,11 +54,12 @@ final class FGVoice {
     private var lastSave: TimeInterval = 0
     private var lastSeek: TimeInterval = 0
     init(_ store: FGStore) { self.store = store }
-    deinit { state?.dispose() }
-    func play(_ peer: Int64, queue: [FGHistory]) { generation = UUID(); state?.dispose(); state = nil; current = 0; self.peer = peer; self.queue = queue; next() }
-    func stop() { generation = UUID(); current = 0; queue = []; state?.dispose(); state = nil; store.context.sharedContext.mediaManager.playlistControl(.playback(.pause), type: .voice) }
+    deinit { state?.dispose(); playlistState?.dispose() }
+    func play(_ peer: Int64, queue: [FGHistory]) { generation = UUID(); state?.dispose(); state = nil; playlistState?.dispose(); playlistState = nil; current = 0; self.peer = peer; self.queue = queue; next() }
+    func stop() { generation = UUID(); current = 0; queue = []; state?.dispose(); state = nil; playlistState?.dispose(); playlistState = nil; store.context.sharedContext.mediaManager.playlistControl(.playback(.pause), type: .voice) }
     private func next() {
-        guard !queue.isEmpty else { state?.dispose(); return }
+        playlistState?.dispose(); playlistState = nil
+        guard !queue.isEmpty else { state?.dispose(); state = nil; return }
         let row = queue.removeFirst(); current = row.id; let generation = self.generation
         fetch.message(peer, id: row.id) { [weak self] message in
             guard let self, self.store.alive, let message, FGStore.safe(message), self.current == row.id, self.generation == generation else { return }
@@ -67,6 +69,18 @@ final class FGVoice {
             let saved = self.store.prefs.double(forKey: "voice_\(self.peer)_\(row.id)")
             if saved > 0 && saved < Double(row.seconds) - 1 { manager.playlistControl(.seek(saved), type: .voice) }
             let waveform = self.silenceRanges(message, duration: Double(row.seconds))
+            var loaded = false
+            self.playlistState = (playlist.state |> deliverOnMainQueue).start(next: { [weak self] playback in
+                guard let self, self.store.alive, self.current == row.id, self.generation == generation else { return }
+                if playback.item != nil { loaded = true }
+                else if loaded && !playback.loading {
+                    self.current = 0
+                    self.store.prefs.set(true, forKey: "heard_\(self.peer)_\(row.id)")
+                    self.store.prefs.removeObject(forKey: "voice_\(self.peer)_\(row.id)")
+                    self.state?.dispose(); self.state = nil
+                    DispatchQueue.main.async { [weak self] in guard let self, self.generation == generation else { return }; self.next() }
+                }
+            })
             self.state?.dispose()
             self.state = (manager.filteredPlaylistState(accountId: self.store.context.account.id, playlistId: playlist.id, itemId: PeerMessagesMediaPlaylistItemId(messageId: message.id, messageIndex: message.index), type: .voice) |> deliverOnMainQueue).start(next: { [weak self] playback in
                 guard let self, self.store.alive, let playback, self.current == row.id, self.generation == generation else { return }
@@ -75,11 +89,6 @@ final class FGVoice {
                 if self.store.prefs.bool(forKey: "voice_skip_silence"), ProcessInfo.processInfo.systemUptime - self.lastSeek > 0.8, let range = waveform.first(where: { $0.contains(position) && $0.upperBound - position > 0.4 }) {
                     self.lastSeek = ProcessInfo.processInfo.systemUptime
                     manager.playlistControl(.seek(range.upperBound), type: .voice)
-                }
-                if playback.status.duration > 0, position >= playback.status.duration - 0.15 {
-                    self.store.prefs.set(true, forKey: "heard_\(self.peer)_\(row.id)"); self.store.prefs.removeObject(forKey: "voice_\(self.peer)_\(row.id)")
-                    self.state?.dispose(); self.state = nil
-                    DispatchQueue.main.async { [weak self] in guard let self, self.generation == generation else { return }; self.next() }
                 }
             })
         }

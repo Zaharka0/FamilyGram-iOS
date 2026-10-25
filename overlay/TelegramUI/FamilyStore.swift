@@ -163,7 +163,8 @@ final class FGStore {
     func send(_ peer: Int64, kind: String, entity: String = UUID().uuidString.lowercased(), human: String, fields: [String: String] = [:], reply: EngineMessage.Id? = nil) throws {
         guard alive, peer != 0, peer != own else { throw FGError.invalid("Выберите личный чат") }
         let createsCard = ["task", "event", "bookmark", "hug", "goal", "game", "bill"].contains(kind)
-        let key = "\(peer):\(kind):\(createsCard ? \"\" : entity):\(human):\(fields.sorted { $0.key < $1.key })"
+        let actionIdentity = createsCard ? "" : entity
+        let key = "\(peer):\(kind):\(actionIdentity):\(human):\(fields.sorted { $0.key < $1.key })"
         guard accept(key) else { return }
         var fields = fields
         let clock = max(((prefs.object(forKey: "lamport") as? NSNumber)?.int64Value ?? 0) + 1, Int64(Date().timeIntervalSince1970) * 1_000_000)
