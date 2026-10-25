@@ -86,13 +86,13 @@ final class FGStore {
         DispatchQueue.main.async { [weak self] in self?.privacy.sync(); if let self { FGUpdates.automatic(self) } }
     }
     func id(_ peer: Int64) -> EnginePeer.Id {
-        let namespace: Int32 = peer > 0 ? Namespaces.Peer.CloudUser : (prefs.object(forKey: "dialog_namespace_\(peer)") as? NSNumber)?.int32Value ?? Namespaces.Peer.CloudChannel
+        let namespace: PeerId.Namespace = peer > 0 ? Namespaces.Peer.CloudUser : ((prefs.object(forKey: "dialog_namespace_\(peer)") as? NSNumber).map { PeerId.Namespace._internalFromInt32Value($0.int32Value) } ?? Namespaces.Peer.CloudChannel)
         return EnginePeer.Id(namespace: namespace, id: EnginePeer.Id.Id._internalFromInt64Value(abs(peer)))
     }
     func dialog(_ peer: EnginePeer.Id) -> Int64 {
         let value = peer.id._internalGetInt64Value()
         if peer.namespace == Namespaces.Peer.CloudUser { return value }
-        let dialog = -abs(value); prefs.set(peer.namespace, forKey: "dialog_namespace_\(dialog)"); return dialog
+        let dialog = -abs(value); prefs.set(peer.namespace._internalGetInt32Value(), forKey: "dialog_namespace_\(dialog)"); return dialog
     }
     func accept(_ key: String, delay: TimeInterval = 1.5) -> Bool {
         let now = ProcessInfo.processInfo.systemUptime
