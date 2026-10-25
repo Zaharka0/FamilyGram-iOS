@@ -7,6 +7,7 @@ import TelegramCore
 import SwiftSignalKit
 import AccountContext
 import SettingsUI
+import TelegramPresentationData
 
 final class FamilyHubController: ViewController, UISearchBarDelegate {
     let store: FGStore
@@ -20,6 +21,8 @@ final class FamilyHubController: ViewController, UISearchBarDelegate {
     private var names: [Int64: String] = [:]
     private var isRendering = false
     private var selectedMessage: EngineMessage?
+    private var presentationData: PresentationData
+    private var presentationDisposable: Disposable?
     static let sections: [(String, String, String)] = [
         ("tasks", "☑️ Покупки и дела", "Общие списки с отметками для обоих"),
         ("calendar", "📅 Календарь семьи", "Встречи, поездки и дни рождения"),
@@ -39,16 +42,27 @@ final class FamilyHubController: ViewController, UISearchBarDelegate {
         ("updates", "↻ Обновления", "Новые версии, изменения и IPA")]
     init(context: AccountContext, peer: Int64? = nil, page: String = "home", message: EngineMessage? = nil) {
         store = FGStore.get(context); self.page = page; selectedMessage = message
-        super.init(navigationBarPresentationData: nil)
+        presentationData = context.sharedContext.currentPresentationData.with { $0 }
+        super.init(navigationBarPresentationData: NavigationBarPresentationData(presentationData: presentationData))
+        statusBar.statusBarStyle = presentationData.theme.rootController.statusBarStyle.style
+        overrideUserInterfaceStyle = presentationData.theme.overallDarkAppearance ? .dark : .light
         if let peer, peer != 0 { store.prefs.set(peer, forKey: "workspace_peer") }
         title = "FamilyGram"
         tabBarItem.title = "FamilyGram"; tabBarItem.image = UIImage(systemName: "heart.circle")
         FGScreenCover.shared.start()
+        presentationDisposable = (context.sharedContext.presentationData |> deliverOnMainQueue).start(next: { [weak self] value in
+            guard let self else { return }
+            self.presentationData = value
+            self.statusBar.statusBarStyle = value.theme.rootController.statusBarStyle.style
+            self.overrideUserInterfaceStyle = value.theme.overallDarkAppearance ? .dark : .light
+            self.navigationBar?.updatePresentationData(NavigationBarPresentationData(presentationData: value))
+            if self.isNodeLoaded { self.displayNode.backgroundColor = value.theme.list.blocksBackgroundColor; self.render() }
+        })
     }
     required init(coder: NSCoder) { fatalError("init(coder:) is unavailable") }
     var peer: Int64 { (store.prefs.object(forKey: "workspace_peer") as? NSNumber)?.int64Value ?? store.partner }
     override func loadDisplayNode() {
-        displayNode = ASDisplayNode(); displayNode.backgroundColor = .systemGroupedBackground
+        displayNode = ASDisplayNode(); displayNode.backgroundColor = presentationData.theme.list.blocksBackgroundColor
         displayNodeDidLoad()
         search.placeholder = "Поиск функций FamilyGram"; search.delegate = self; search.searchBarStyle = .minimal
         view.addSubview(search); view.addSubview(scroll)
@@ -73,7 +87,7 @@ final class FamilyHubController: ViewController, UISearchBarDelegate {
         poll?.invalidate(); poll = Foundation.Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in guard let self else { return }; if self.peer != 0 { self.store.sync(self.peer) } }
     }
     override func viewDidDisappear(_ animated: Bool) { super.viewDidDisappear(animated); poll?.invalidate(); poll = nil }
-    deinit { poll?.invalidate() }
+    deinit { poll?.invalidate(); presentationDisposable?.dispose() }
     func searchBar(_ searchBar: UISearchBar, textDidChange searchText: String) { query = searchText.lowercased(); render() }
     @objc private func settings() { open("settings") }
     func open(_ page: String) { self.page = page; query = ""; search.text = ""; search.resignFirstResponder(); render(); scroll.setContentOffset(.zero, animated: false) }
@@ -82,12 +96,12 @@ final class FamilyHubController: ViewController, UISearchBarDelegate {
     private func text(_ value: String, large: Bool = false) {
         let label = UILabel(); label.text = value; label.numberOfLines = 0
         label.font = large ? .preferredFont(forTextStyle: .title2) : .preferredFont(forTextStyle: .body)
-        label.adjustsFontForContentSizeCategory = true; label.textColor = .label; stack.addArrangedSubview(label)
+        label.adjustsFontForContentSizeCategory = true; label.textColor = presentationData.theme.list.itemPrimaryTextColor; stack.addArrangedSubview(label)
     }
     private func row(_ title: String, _ detail: String = "", action: @escaping () throws -> Void) {
         guard matches(title + " " + detail) else { return }
         let button = UIButton(type: .system)
-        var configuration = UIButton.Configuration.filled(); configuration.baseBackgroundColor = .secondarySystemGroupedBackground; configuration.baseForegroundColor = .label
+        var configuration = UIButton.Configuration.filled(); configuration.baseBackgroundColor = presentationData.theme.list.itemBlocksBackgroundColor; configuration.baseForegroundColor = presentationData.theme.list.itemPrimaryTextColor
         configuration.title = title; configuration.subtitle = detail.isEmpty ? nil : detail; configuration.titleAlignment = .leading; configuration.contentInsets = NSDirectionalEdgeInsets(top: 16, leading: 16, bottom: 16, trailing: 16); configuration.cornerStyle = .large
         button.configuration = configuration; button.contentHorizontalAlignment = .leading
         button.titleLabel?.numberOfLines = 0; button.heightAnchor.constraint(greaterThanOrEqualToConstant: 60).isActive = true
@@ -150,6 +164,9 @@ final class FamilyHubController: ViewController, UISearchBarDelegate {
     private func render() {
         guard isNodeLoaded, !isRendering else { return }; isRendering = true; defer { isRendering = false }
         clear(); loadName(peer)
+        search.searchTextField.backgroundColor = presentationData.theme.list.itemBlocksBackgroundColor
+        search.searchTextField.textColor = presentationData.theme.list.itemPrimaryTextColor
+        search.tintColor = presentationData.theme.list.itemAccentColor
         title = page == "home" ? "FamilyGram" : Self.sections.first(where: { $0.0 == page })?.1 ?? "Настройки FamilyGram"
         if page != "home" { row("‹ Все разделы") { [weak self] in self?.open("home") } }
         if page == "settings" { settingsPage(); return }
@@ -267,7 +284,7 @@ final class FamilyHubController: ViewController, UISearchBarDelegate {
                 for x in 0..<game.width {
                     let index = y * game.width + x, move = game.target == 4 ? x : index
                     let button = UIButton(type: .system); button.setTitle(game.cells[index] == "." ? "·" : String(game.cells[index]), for: .normal); button.titleLabel?.font = .systemFont(ofSize: 28)
-                    button.backgroundColor = .secondarySystemGroupedBackground; button.layer.cornerRadius = 10; button.heightAnchor.constraint(equalToConstant: 48).isActive = true
+                    button.backgroundColor = presentationData.theme.list.itemBlocksBackgroundColor; button.layer.cornerRadius = 10; button.heightAnchor.constraint(equalToConstant: 48).isActive = true
                     button.isEnabled = game.turn == store.own
                     button.accessibilityLabel = "Строка \(y+1), столбец \(x+1): \(game.cells[index])"
                     button.addAction(UIAction { [weak self, weak button] _ in guard let self, self.store.accept("move:" + card.op.entity) else { return }; do { try self.send("move", entity: card.op.entity, human: "🎮 Ход \(move + 1)", fields: ["cell": String(move)]); button?.isEnabled = false } catch { self.alert(error.localizedDescription) } }, for: .touchUpInside)
@@ -292,12 +309,14 @@ final class FamilyHubController: ViewController, UISearchBarDelegate {
     }
     private lazy var media = FGMediaFetch(store)
     private var pluginPicker: FGPluginPicker?
-    func openMessage(_ id: Int32) {
+    func openMessage(_ id: Int32, dialog: Int64? = nil) {
+        let peer = dialog ?? self.peer
+        guard peer != 0 else { return }
         let context = store.context
         let _ = (context.engine.data.get(TelegramEngine.EngineData.Item.Peer.Peer(id: store.id(peer))) |> take(1) |> deliverOnMainQueue).start(next: { [weak self] selected in
             guard let self, let selected, let navigation = self.navigationController as? NavigationController else { return }
             let mid = EngineMessage.Id(peerId: selected.id, namespace: Namespaces.Message.Cloud, id: id)
-            context.sharedContext.navigateToChatController(NavigateToChatControllerParams(navigationController: navigation, context: context, chatLocation: .peer(selected), subject: .message(id: .id(mid), highlight: nil, timecode: nil, setupReply: false), keepStack: .always))
+            context.sharedContext.navigateToChatController(NavigateToChatControllerParams(navigationController: navigation, context: context, chatLocation: .peer(selected), subject: id > 0 ? .message(id: .id(mid), highlight: nil, timecode: nil, setupReply: false) : nil, keepStack: .always))
         })
     }
     private func album() {
@@ -432,7 +451,7 @@ final class FamilyHubController: ViewController, UISearchBarDelegate {
         updateWidget()
         text("Виджет пары", large: true)
         row("Выбрать фото для виджета") { [weak self] in guard let self else { return }; let picker = FGWidgetPhotoPicker(owner: self, store: self.store) { [weak self] in self?.updateWidget() }; self.widgetPicker = picker; picker.open() }
-        row("Открыть чат половинки") { [weak self] in self?.openMessage(0) }
+        row("Открыть чат половинки") { [weak self] in guard let self else { return }; self.openMessage(0, dialog: self.store.partner) }
         text("На домашнем экране удерживайте свободное место → «Изменить» → «Добавить виджет» → FamilyGram. Данные берутся из этого аккаунта. После смены фото откройте этот раздел для обновления.")
     }
     private func updatesPage() {

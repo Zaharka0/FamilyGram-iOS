@@ -49,7 +49,7 @@ final class FGStore {
     private let folder: URL
     var partner: Int64 {
         get { (prefs.object(forKey: "partner") as? NSNumber)?.int64Value ?? 0 }
-        set { prefs.set(newValue, forKey: "partner"); changed?() }
+        set { prefs.set(newValue, forKey: "partner"); FamilyPolicy.notify(own); changed?() }
     }
     init(_ context: AccountContext) {
         self.context = context; own = context.account.peerId.id._internalGetInt64Value()
@@ -210,6 +210,7 @@ final class FGStore {
     func answer(_ peer: Int64, text: String) throws {
         guard peer > 0, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, text.utf16.count <= 600 else { throw FGError.invalid("Ответ: 1–600 символов") }
         let question = FGCore.questionID(), salt = UUID().uuidString.lowercased()
+        reveals.remove("answer_\(peer)_\(question)")
         prefs.set(salt + "\n" + text, forKey: "answer_\(peer)_\(question)")
         try send(peer, kind: "question_commit", entity: question, human: "FamilyGram · Ответ на вопрос дня сохранён", fields: ["hash": FGCore.digest(salt + "\n" + text)])
     }

@@ -31,6 +31,7 @@ def integrate(source, changes):
                 if let peer = note.userInfo?["peer"] as? Int64 { FGStore.get(self.context).prefs.set(peer, forKey: "workspace_peer") }
                 self.rootTabController?.selectedIndex = index
                 UserDefaults.standard.removeObject(forKey: "family_pending_open")
+                DispatchQueue.main.async { [weak family] in family?.openMessage(0) }
             }
         }''')
     edit(root, '        controllers.append(self.accountSettingsController!)', '        controllers.append(self.accountSettingsController!)\n        if let family = self.familyController { controllers.append(family) }')
@@ -48,6 +49,7 @@ def integrate(source, changes):
             let parameters = URLComponents(url: url, resolvingAgainstBaseURL: false)?.queryItems ?? []
             let account = parameters.first(where: { $0.name == "account" }).flatMap { Int64($0.value ?? "") } ?? 0
             let peer = parameters.first(where: { $0.name == "peer" }).flatMap { Int64($0.value ?? "") } ?? 0
+            guard account > 0, peer > 0, account != peer else { return }
             UserDefaults.standard.set(["account": account, "peer": peer], forKey: "family_pending_open")
             let _ = (self.sharedContextPromise.get() |> take(1) |> mapToSignal { application -> Signal<(SharedAccountContextImpl, AccountRecordId?), NoError> in
                 application.sharedContext.activeAccountsWithInfo |> take(1) |> map { values in (application.sharedContext, values.accounts.first(where: { $0.peer.id.id._internalGetInt64Value() == account })?.account.id) }
