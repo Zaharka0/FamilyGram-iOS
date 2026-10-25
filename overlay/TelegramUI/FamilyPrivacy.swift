@@ -32,7 +32,7 @@ private struct FGPrivacySnapshot: Codable, Equatable {
 }
 
 final class FGPrivacy {
-    private let store: FGStore
+    private unowned let store: FGStore
     private var busy = false
     private var pending = false
     private var lifetime: Disposable?

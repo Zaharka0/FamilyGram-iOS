@@ -215,8 +215,10 @@ final class FamilyHubController: ViewController, UISearchBarDelegate {
     }
     private func calendar() {
         row("＋ Добавить событие", "Встреча, поездка или день рождения") { [weak self] in self?.newEvent() }
-        for card in store.cards(peer, kind: "event").sorted(by: { $0.op.number("at") < $1.op.number("at") }) {
-            row("📅 " + card.op["title"], date(card.op.number("at")) + (card.op["annual"] == "1" ? " · Ежегодно" : "")) { [weak self] in
+        let now = Date()
+        func occurrence(_ card: FGCard) -> Date { FGCalendar.occurrence(card.op.number("at"), annual: card.op["annual"] == "1", now: now) }
+        for card in store.cards(peer, kind: "event").sorted(by: { occurrence($0) < occurrence($1) }) {
+            row("📅 " + card.op["title"], DateFormatter.localizedString(from: occurrence(card), dateStyle: .medium, timeStyle: .short) + (card.op["annual"] == "1" ? " · Ежегодно" : "")) { [weak self] in
                 guard let self else { return }
                 if card.origin.actor == self.store.own { try self.send("event_cancel", entity: card.op.entity, human: "Событие отменено") }
                 else { self.alert("Отменить событие может его автор") }

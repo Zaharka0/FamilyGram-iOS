@@ -87,3 +87,15 @@ for bad in ["http://github.com/Zaharka0/FamilyGram-iOS/releases/download/v1.3.0/
     expect(FGReleasePolicy.trustedIPA(bad) == nil, "Unsafe release URL accepted")
 }
 print("iOS release version/build and IPA URL policy passed")
+
+var eventCalendar = Calendar(identifier: .gregorian)
+eventCalendar.timeZone = TimeZone(secondsFromGMT: 0)!
+func eventDate(_ year: Int, _ month: Int, _ day: Int) -> Date {
+    eventCalendar.date(from: DateComponents(year: year, month: month, day: day, hour: 12))!
+}
+let leapBirthday = Int64(eventDate(2024, 2, 29).timeIntervalSince1970 * 1000)
+expect(FGCalendar.occurrence(leapBirthday, annual: true, now: eventDate(2025, 1, 1), calendar: eventCalendar) == eventDate(2025, 2, 28), "Leap birthday must use the last February day in common years")
+expect(FGCalendar.occurrence(leapBirthday, annual: true, now: eventDate(2025, 3, 1), calendar: eventCalendar) == eventDate(2026, 2, 28), "Past annual event must advance")
+expect(FGCalendar.occurrence(leapBirthday, annual: true, now: eventDate(2028, 1, 1), calendar: eventCalendar) == eventDate(2028, 2, 29), "Leap birthday must retain its original day in leap years")
+expect(FGCalendar.occurrence(leapBirthday, annual: false, now: eventDate(2025, 1, 1), calendar: eventCalendar) == eventDate(2024, 2, 29), "One-time events must retain the original date")
+print("Annual calendar rollover and leap birthdays passed")

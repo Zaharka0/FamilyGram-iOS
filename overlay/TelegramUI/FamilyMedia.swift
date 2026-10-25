@@ -29,8 +29,14 @@ final class FGMediaFetch {
             }
         }
         guard let resource else { completion(nil); return }
-        disposables.add(store.context.engine.resources.fetchedResource(resource: resource).start(error: { _ in completion(nil) }))
-        disposables.add((store.context.engine.resources.data(resource: resource, waitUntilFetchStatus: true) |> filter { $0.complete } |> take(1) |> deliverOnMainQueue).start(next: { data in completion(URL(fileURLWithPath: data.path)) }))
+        var finished = false
+        func finish(_ url: URL?) {
+            DispatchQueue.main.async {
+                guard !finished else { return }; finished = true; completion(url)
+            }
+        }
+        disposables.add(store.context.engine.resources.fetchedResource(resource: resource).start(error: { _ in finish(nil) }))
+        disposables.add((store.context.engine.resources.data(resource: resource, waitUntilFetchStatus: true) |> filter { $0.complete } |> take(1) |> deliverOnMainQueue).start(next: { data in finish(URL(fileURLWithPath: data.path)) }))
     }
 }
 
@@ -43,17 +49,18 @@ final class FGVoice {
     private var queue: [FGHistory] = []
     private var peer: Int64 = 0
     private var current: Int32 = 0
+    private var generation = UUID()
     private var lastSave: TimeInterval = 0
     private var lastSeek: TimeInterval = 0
     init(_ store: FGStore) { self.store = store }
     deinit { state?.dispose() }
-    func play(_ peer: Int64, queue: [FGHistory]) { self.peer = peer; self.queue = queue; next() }
-    func stop() { queue = []; state?.dispose(); state = nil; store.context.sharedContext.mediaManager.playlistControl(.playback(.pause), type: .voice) }
+    func play(_ peer: Int64, queue: [FGHistory]) { generation = UUID(); state?.dispose(); state = nil; current = 0; self.peer = peer; self.queue = queue; next() }
+    func stop() { generation = UUID(); current = 0; queue = []; state?.dispose(); state = nil; store.context.sharedContext.mediaManager.playlistControl(.playback(.pause), type: .voice) }
     private func next() {
         guard !queue.isEmpty else { state?.dispose(); return }
-        let row = queue.removeFirst(); current = row.id
+        let row = queue.removeFirst(); current = row.id; let generation = self.generation
         fetch.message(peer, id: row.id) { [weak self] message in
-            guard let self, let message, FGStore.safe(message), self.current == row.id else { return }
+            guard let self, self.store.alive, let message, FGStore.safe(message), self.current == row.id, self.generation == generation else { return }
             let playlist = PeerMessagesMediaPlaylist(context: self.store.context, location: .singleMessage(message.id), chatLocationContextHolder: nil)
             let manager = self.store.context.sharedContext.mediaManager
             manager.setPlaylist((self.store.context, playlist), type: .voice, control: .playback(.play))
@@ -62,7 +69,7 @@ final class FGVoice {
             let waveform = self.silenceRanges(message, duration: Double(row.seconds))
             self.state?.dispose()
             self.state = (manager.filteredPlaylistState(accountId: self.store.context.account.id, playlistId: playlist.id, itemId: PeerMessagesMediaPlaylistItemId(messageId: message.id, messageIndex: message.index), type: .voice) |> deliverOnMainQueue).start(next: { [weak self] playback in
-                guard let self, let playback, self.current == row.id else { return }
+                guard let self, self.store.alive, let playback, self.current == row.id, self.generation == generation else { return }
                 let position = playback.status.timestamp
                 if ProcessInfo.processInfo.systemUptime - self.lastSave > 1 { self.lastSave = ProcessInfo.processInfo.systemUptime; self.store.prefs.set(position, forKey: "voice_\(self.peer)_\(row.id)") }
                 if self.store.prefs.bool(forKey: "voice_skip_silence"), ProcessInfo.processInfo.systemUptime - self.lastSeek > 0.8, let range = waveform.first(where: { $0.contains(position) && $0.upperBound - position > 0.4 }) {
@@ -72,7 +79,7 @@ final class FGVoice {
                 if playback.status.duration > 0, position >= playback.status.duration - 0.15 {
                     self.store.prefs.set(true, forKey: "heard_\(self.peer)_\(row.id)"); self.store.prefs.removeObject(forKey: "voice_\(self.peer)_\(row.id)")
                     self.state?.dispose(); self.state = nil
-                    DispatchQueue.main.async { self.next() }
+                    DispatchQueue.main.async { [weak self] in guard let self, self.generation == generation else { return }; self.next() }
                 }
             })
         }
@@ -131,7 +138,7 @@ final class FGWatchController: UIViewController {
         status.textColor = .white; status.numberOfLines = 0; status.text = "Нажмите «Присоединиться». Общая пауза и перемотка действуют у обоих."
         join.setTitle("Присоединиться", for: .normal); join.addAction(UIAction { [weak self] _ in self?.connect() }, for: .touchUpInside)
         play.setTitle("Пуск / пауза", for: .normal); play.isEnabled = false; play.addAction(UIAction { [weak self] _ in guard let self, let engine = self.player.player else { return }; self.publish(playing: engine.rate == 0, position: engine.currentTime().seconds) }, for: .touchUpInside)
-        slider.isEnabled = false; slider.addAction(UIAction { [weak self] _ in guard let self, let engine = self.player.player, let duration = engine.currentItem?.duration.seconds, duration.isFinite else { return }; self.publish(playing: engine.rate > 0, position: Double(self.slider.value) * duration) }, for: .touchUpInside)
+        slider.isEnabled = false; slider.addAction(UIAction { [weak self] _ in guard let self, let engine = self.player.player, let duration = engine.currentItem?.duration.seconds, duration.isFinite else { return }; self.publish(playing: engine.rate > 0, position: Double(self.slider.value) * duration) }, for: [.touchUpInside, .touchUpOutside])
         let leave = UIButton(type: .system); leave.setTitle("Выйти из просмотра", for: .normal); leave.addAction(UIAction { [weak self] _ in self?.disconnect(); self?.dismiss(animated: true) }, for: .touchUpInside)
         for item in [status, join, play, slider, leave] { controls.addArrangedSubview(item) }; view.addSubview(controls)
         player.view.translatesAutoresizingMaskIntoConstraints = false
