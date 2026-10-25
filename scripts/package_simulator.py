@@ -8,6 +8,7 @@ import tempfile
 from pathlib import Path
 from common import MANIFEST, run
 from verify_ipa import inspect
+from python_runtime import install as install_python
 
 
 def package_simulator(input_path, output, bundle_id='org.familygram.ios'):
@@ -22,6 +23,7 @@ def package_simulator(input_path, output, bundle_id='org.familygram.ios'):
         original = next((stage / 'Payload').glob('*.app'))
         app = stage / 'FamilyGram.app'
         original.rename(app)
+        install_python(app, simulator=True)
         entitlements = stage / 'Simulator.entitlements'
         entitlements.write_bytes(plistlib.dumps({
             'com.apple.security.application-groups': [f'group.{bundle_id}'],
@@ -30,6 +32,12 @@ def package_simulator(input_path, output, bundle_id='org.familygram.ios'):
         nested = list(app.rglob('*.dylib')) + [p for p in app.rglob('*.framework') if p.is_dir()]
         for binary in sorted(nested, key=lambda p: len(p.parts), reverse=True):
             run(['/usr/bin/codesign', '--force', '--sign', '-', '--timestamp=none', binary])
+        for extension in app.glob('PlugIns/*.appex'):
+            info = plistlib.loads((extension / 'Info.plist').read_bytes())
+            widget_entitlements = {'com.apple.security.application-groups': [f'group.{bundle_id}']}
+            widget_file = stage / 'FamilyWidget.entitlements'
+            widget_file.write_bytes(plistlib.dumps(widget_entitlements))
+            run(['/usr/bin/codesign', '--force', '--sign', '-', '--timestamp=none', '--entitlements', widget_file, extension])
         run(['/usr/bin/codesign', '--force', '--sign', '-', '--timestamp=none',
              '--entitlements', entitlements, app])
         run(['/usr/bin/codesign', '--verify', '--deep', '--strict', app])

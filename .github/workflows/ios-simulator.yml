@@ -34,6 +34,8 @@ jobs:
       - name: Check macOS, Xcode and disk space
         run: python3 scripts/preflight.py
       - run: python3 -m pip install -r requirements.txt
+      - name: Prepare checksum-verified embedded Python
+        run: python3 scripts/python_runtime.py
       - name: Fetch pinned Telegram source and its submodules
         run: python3 scripts/checkout.py
       - name: Apply FamilyGram branding and unsigned build mode

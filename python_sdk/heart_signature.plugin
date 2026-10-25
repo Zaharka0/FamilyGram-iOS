@@ -1,0 +1,23 @@
+from base_plugin import BasePlugin, HookResult
+from ui.settings import Header, Switch, Input
+
+__id__ = 'heart_signature'
+__name__ = 'Heart signature'
+__description__ = 'Adds a chosen signature only to messages you send to your partner. Disabled by default.'
+__author__ = 'FamilyGram'
+__version__ = '1.0.0'
+__familygram_sdk__ = 1
+
+class HeartSignature(BasePlugin):
+    def on_plugin_load(self):
+        self.add_on_send_message_hook()
+
+    def create_settings(self):
+        return [Header('Heart signature'), Switch('active', 'Add signature', default=False), Input('suffix', 'Signature', default=' ❤️')]
+
+    def on_send_message_hook(self, account, params):
+        if self.get_setting('active', False) and params.peer == self._bridge.getPartner():
+            suffix = self.get_setting('suffix', ' ❤️')[:40]
+            if params.message and len(params.message) + len(suffix) <= 4096 and not params.message.endswith(suffix):
+                params.message += suffix
+        return HookResult()

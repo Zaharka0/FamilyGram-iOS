@@ -25,7 +25,14 @@ def patched_rules(text):
         processor_partials.append(
             partials.provisioning_profile_partial('''
     app = replace_once(app, anchor, GUARD)
-    return text[:start] + app + text[end:]
+    text = text[:start] + app + text[end:]
+    # Only the new FamilyPairWidget extension may omit a device profile in this mode.
+    start = text.index('def _ios_extension_impl(')
+    end = text.index('\ndef ', start + 1)
+    extension = text[start:end]
+    widget_guard = GUARD.replace('        "familygram.altstore_unsigned"', '        label.name == "FamilyPairWidget" and\n        "familygram.altstore_unsigned"')
+    extension = replace_once(extension, anchor, widget_guard)
+    return text[:start] + extension + text[end:]
 
 
 def apply(source):

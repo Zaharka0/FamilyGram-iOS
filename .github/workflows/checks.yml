@@ -24,3 +24,19 @@ jobs:
           python3 scripts/patch_rules.py
           python3 scripts/icons.py
           python3 scripts/check_prepared.py
+  swift-core:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Compile and test the real Swift protocol core against Android vectors
+        run: |
+          mkdir -p build
+          swiftc overlay/TelegramUI/FamilyCore.swift tests/swift/main.swift -o build/family-core-tests
+          build/family-core-tests tests/fixtures/fg1-android-vectors.json
+      - name: Parse all native Swift overlays
+        run: |
+          for file in overlay/TelegramUI/*.swift overlay/TelegramCore/*.swift overlay/FamilyWidget/*.swift; do
+            xcrun swiftc -frontend -parse "$file"
+          done

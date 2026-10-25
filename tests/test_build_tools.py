@@ -62,12 +62,13 @@ class BuildToolsTests(unittest.TestCase):
             exec('if True:\n' + condition, scope)
             self.assertEqual(scope['embed_profile'], expected)
 
-    def test_only_main_application_rule_changes(self):
+    def test_only_main_and_explicit_family_widget_gates_change(self):
         anchor = '    if platform_prerequisites.platform.is_device:\n        processor_partials.append(\n            partials.provisioning_profile_partial('
-        original = 'def _ios_application_impl(ctx):\n' + anchor + '))\n\ndef _ios_extension_impl(ctx):\n' + anchor + '))\n'
+        original = 'def _ios_application_impl(ctx):\n' + anchor + '))\n\ndef _ios_extension_impl(ctx):\n' + anchor + '))\n\ndef unrelated_rule(ctx):\n    return 1\n'
         result = patched_rules(original)
         self.assertIn(GUARD, result)
-        self.assertEqual(result.split('def _ios_extension_impl', 1)[1], original.split('def _ios_extension_impl', 1)[1])
+        self.assertIn('label.name == "FamilyPairWidget"', result)
+        self.assertEqual(result.split('def unrelated_rule', 1)[1], original.split('def unrelated_rule', 1)[1])
         with self.assertRaises(ValueError):
             patched_rules(original.replace(anchor, 'changed upstream'))
 

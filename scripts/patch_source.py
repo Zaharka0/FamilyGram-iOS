@@ -5,6 +5,7 @@ import re
 import subprocess
 from pathlib import Path
 from common import ROOT, MANIFEST, replace_once
+from family_port import integrate
 
 
 def patched_files(source):
@@ -64,7 +65,7 @@ def patched_files(source):
         text = re.sub(r'"CFBundleDisplayName"\s*=\s*"[^"]*";', '', text)
         text += '\n"CFBundleDisplayName" = "FamilyGram";\n'
         changes[path.relative_to(source)] = text
-    return changes
+    return integrate(source, changes)
 
 
 def apply(source):
@@ -83,6 +84,7 @@ def apply(source):
     # Calculate every replacement before writing; a changed anchor leaves files intact.
     changes = patched_files(source)
     for path, content in changes.items():
+        (source / path).parent.mkdir(parents=True, exist_ok=True)
         (source / path).write_text(content)
     marker.write_text(MANIFEST['commit'] + '\n')
     print(f'Patched {len(changes)} source/resource files.')
