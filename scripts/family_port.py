@@ -83,13 +83,13 @@ def integrate(source, changes):
     typing = 'submodules/TelegramCore/Sources/State/ManagedLocalInputActivities.swift'
     edit(typing, 'private func requestActivity(postbox: Postbox, network: Network, accountPeerId: PeerId, peerId: PeerId, threadId: Int64?, activity: PeerInputActivity?) -> Signal<Void, NoError> {', '''private func requestActivity(postbox: Postbox, network: Network, accountPeerId: PeerId, peerId: PeerId, threadId: Int64?, activity: PeerInputActivity?) -> Signal<Void, NoError> {
     if peerId.namespace != Namespaces.Peer.SecretChat && FamilyPolicy.blocks("ghost_typing", account: accountPeerId.id._internalGetInt64Value(), peer: FamilyPolicy.identifier(peerId)) { return .complete() }''')
-    opening = Path('submodules/TelegramUI/Components/Stories/StoryContainerScreen/Sources/OpenStories.swift')
-    text = (source / opening).read_text()
-    for name in ['openPeerStories', 'openPeerStoriesCustom']:
-        start = text.index('    static func ' + name + '(')
-        body = text.index(' {', start) + 2
-        text = text[:body] + '\n        if FamilyPolicy.hiddenStory(account: context.account.peerId.id._internalGetInt64Value(), peer: FamilyPolicy.identifier(peerId)) { return }' + text[body:]
-    changes[opening] = text
+    opening = 'submodules/TelegramUI/Components/Stories/StoryContainerScreen/Sources/OpenStories.swift'
+    story_guard = '        if FamilyPolicy.hiddenStory(account: context.account.peerId.id._internalGetInt64Value(), peer: FamilyPolicy.identifier(peerId)) { return }\n'
+    # Match actual body statements: a Swift default argument can itself contain
+    # a closure, so the first opening brace after a signature is not its body.
+    edit(opening, '        return openPeerStoriesCustom(', story_guard + '        return openPeerStoriesCustom(')
+    content_anchor = '        let storyContent = StoryContentContextImpl(context: context, isHidden: isHidden, focusedPeerId: peerId, focusedStoryId: focusOnId, singlePeer: singlePeer, fixedOrder: initialOrder)'
+    edit(opening, content_anchor, story_guard + content_anchor)
     chat = 'submodules/TelegramUI/Sources/ChatController.swift'
     edit(chat, '    func sendMessages(_ messages: [EnqueueMessage], media: Bool = false, postpone: Bool = false, commit: Bool = false) {', '''    func sendMessages(_ messages: [EnqueueMessage], media: Bool = false, postpone: Bool = false, commit: Bool = false, familygramBypass: Bool = false) {
         if !familygramBypass, let peer = self.chatLocation.peerId, peer.namespace == Namespaces.Peer.CloudUser {

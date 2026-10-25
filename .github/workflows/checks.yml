@@ -46,3 +46,10 @@ jobs:
           for file in overlay/TelegramUI/*.swift overlay/TelegramCore/*.swift overlay/FamilyWidget/*.swift; do
             xcrun swiftc -frontend -parse "$file"
           done
+      - name: Parse patched upstream Swift integration points
+        run: |
+          python3 scripts/checkout.py --no-submodules --sparse-check
+          python3 scripts/patch_source.py
+          find source -name '*.swift' -print0 | while IFS= read -r -d '' file; do
+            xcrun swiftc -frontend -parse "$file"
+          done
