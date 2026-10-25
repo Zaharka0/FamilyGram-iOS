@@ -304,7 +304,10 @@ final class FamilyHubController: ViewController, UISearchBarDelegate {
         text("Поиск по дате: введите 2026-10 или 2026-10-25 в поле сверху.")
         coverage()
         let formatter = DateFormatter(); formatter.dateFormat = "yyyy-MM-dd HH:mm"
-        for item in store.rows(peer).filter({ $0.media == 1 || $0.media == 2 }).prefix(1000) {
+        let visible = store.rows(peer).filter { item in
+            (item.media == 1 || item.media == 2) && matches(formatter.string(from: Date(timeIntervalSince1970: Double(item.date))) + " " + item.text)
+        }
+        for item in visible.prefix(1000) {
             let when = formatter.string(from: Date(timeIntervalSince1970: Double(item.date)))
             row((item.media == 1 ? "🖼 " : "🎞 ") + when, String(item.text.prefix(160))) { [weak self] in self?.openMedia(item) }
         }

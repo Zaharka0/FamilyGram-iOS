@@ -120,11 +120,12 @@ final class FGScreenCover {
         let captured: Bool
         if #available(iOS 18.4, *) { captured = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).contains { $0.traitCollection.sceneCaptureState == .active } }
         else { captured = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).contains { $0.screen.isCaptured } }
-        if manuallyHidden || captured || UIApplication.shared.applicationState != .active { show(appSwitcher: false) }
-        else { FGWidgetBridge.setHidden(false); cover?.isHidden = true; cover = nil }
+        FGWidgetBridge.setHidden(manuallyHidden || captured)
+        if manuallyHidden || captured || UIApplication.shared.applicationState != .active { show(appSwitcher: !manuallyHidden && !captured) }
+        else { cover?.isHidden = true; cover = nil }
     }
     private func show(appSwitcher: Bool) {
-        FGWidgetBridge.setHidden(true)
+        if !appSwitcher { FGWidgetBridge.setHidden(true) }
         if cover == nil {
             guard let scene = UIApplication.shared.connectedScenes.compactMap({ $0 as? UIWindowScene }).first(where: { $0.activationState != .unattached }) else { return }
             let window = UIWindow(windowScene: scene)

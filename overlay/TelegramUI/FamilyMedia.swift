@@ -55,14 +55,15 @@ final class FGVoice {
     private var lastSeek: TimeInterval = 0
     init(_ store: FGStore) { self.store = store }
     deinit { state?.dispose(); playlistState?.dispose() }
-    func play(_ peer: Int64, queue: [FGHistory]) { generation = UUID(); state?.dispose(); state = nil; playlistState?.dispose(); playlistState = nil; current = 0; self.peer = peer; self.queue = queue; next() }
+    func play(_ peer: Int64, queue: [FGHistory]) { guard !queue.isEmpty else { return }; generation = UUID(); state?.dispose(); state = nil; playlistState?.dispose(); playlistState = nil; current = 0; self.peer = peer; self.queue = queue; next() }
     func stop() { generation = UUID(); current = 0; queue = []; state?.dispose(); state = nil; playlistState?.dispose(); playlistState = nil; store.context.sharedContext.mediaManager.playlistControl(.playback(.pause), type: .voice) }
     private func next() {
         playlistState?.dispose(); playlistState = nil
         guard !queue.isEmpty else { state?.dispose(); state = nil; return }
         let row = queue.removeFirst(); current = row.id; let generation = self.generation
         fetch.message(peer, id: row.id) { [weak self] message in
-            guard let self, self.store.alive, let message, FGStore.safe(message), self.current == row.id, self.generation == generation else { return }
+            guard let self, self.store.alive, self.current == row.id, self.generation == generation else { return }
+            guard let message, FGStore.safe(message) else { self.next(); return }
             let playlist = PeerMessagesMediaPlaylist(context: self.store.context, location: .singleMessage(message.id), chatLocationContextHolder: nil)
             let manager = self.store.context.sharedContext.mediaManager
             manager.setPlaylist((self.store.context, playlist), type: .voice, control: .playback(.play))
