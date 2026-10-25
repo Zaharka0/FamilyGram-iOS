@@ -63,7 +63,19 @@ jobs:
       - name: Build arm64 release and package for AltStore
         env:
           FAMILYGRAM_BUILD_NUMBER: ${{ github.run_number }}
-        run: python3 scripts/build.py --build-number "$FAMILYGRAM_BUILD_NUMBER"
+        run: |
+          set +e
+          python3 scripts/build.py --build-number "$FAMILYGRAM_BUILD_NUMBER" 2>&1 | tee build.log
+          code=${PIPESTATUS[0]}
+          if [ "$code" != "0" ]; then
+            grep -E "error:|ERROR:|Error:|fatal" build.log | tail -15 | cut -c1-900 | while IFS= read -r line; do
+              echo "::error title=build::${line//%/%25}"
+            done
+            tail -25 build.log | cut -c1-400 | while IFS= read -r line; do
+              echo "::warning title=tail::${line//%/%25}"
+            done
+          fi
+          exit $code
       - name: Upload IPA and checksum
         uses: actions/upload-artifact@v4
         with:
