@@ -30,6 +30,12 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Generate the Android reducer reference ledger
+        run: python3 tests/generate_android_ledger.py
       - name: Compile and test the real Swift protocol core against Android vectors
         run: |
           mkdir -p build

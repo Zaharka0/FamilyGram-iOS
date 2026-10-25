@@ -12,6 +12,7 @@ struct FGHistory: Codable {
     var media: Int // 0 text, 1 photo, 2 video, 3 voice
     var seconds: Int
     var reference: String
+    var unread: Bool?
 }
 
 // All state mutation and callback delivery happens on the main queue. Protocol
@@ -25,6 +26,7 @@ final class FGStore {
     }
     var alive = true
     private let startedAt = Date().timeIntervalSince1970
+    private var persistPending = false
     private let writer = DispatchQueue(label: "FamilyGram.StoreWriter")
     private var deletionEvents: Disposable?
     private var lifecycle: [NSObjectProtocol] = []
@@ -98,11 +100,16 @@ final class FGStore {
         taps[key] = now; if taps.count > 512 { taps = taps.filter { now - $0.value < 60 } }; return true
     }
     func persist() {
-        guard alive else { return }
-        let ops = entries, rows = history, folder = folder
-        writer.async {
-            if let data = try? JSONEncoder().encode(ops) { try? data.write(to: folder.appendingPathComponent("ops.json"), options: [.atomic, .completeFileProtectionUnlessOpen]) }
-            if let data = try? JSONEncoder().encode(rows) { try? data.write(to: folder.appendingPathComponent("history.json"), options: [.atomic, .completeFileProtectionUnlessOpen]) }
+        guard alive, !persistPending else { return }
+        persistPending = true
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) { [weak self] in
+            guard let self else { return }; self.persistPending = false
+            guard self.alive else { return }
+            let ops = self.entries, rows = self.history, folder = self.folder
+            self.writer.async {
+                if let data = try? JSONEncoder().encode(ops) { try? data.write(to: folder.appendingPathComponent("ops.json"), options: [.atomic, .completeFileProtectionUnlessOpen]) }
+                if let data = try? JSONEncoder().encode(rows) { try? data.write(to: folder.appendingPathComponent("history.json"), options: [.atomic, .completeFileProtectionUnlessOpen]) }
+            }
         }
     }
 
@@ -142,11 +149,12 @@ final class FGStore {
             entries[peer]?[message.id.id] = FGEntry(id: message.id.id, date: message.timestamp, actor: actor, op: op)
             prefs.set(max(prefs.object(forKey: "lamport") as? Int64 ?? 0, op.number("clock")), forKey: "lamport")
             if let ref = message.attributes.compactMap({ $0 as? ReplyMessageAttribute }).first, !op["ref"].isEmpty { prefs.set(ref.messageId.id, forKey: "ref_\(peer)_\(op["ref"])") }
-            if fresh, actor != own, op.kind == "hug", abs(Date().timeIntervalSince1970 - Double(message.timestamp)) < 60 { incomingHug?() }
+            if fresh, actor != own, op.kind == "hug", abs(Date().timeIntervalSince1970 - Double(message.timestamp)) < 60 { FGHug.show(prefs) }
         }
-        if valid == nil {
+        let service = message.engineMedia.contains { if case .action = $0 { return true }; return false }
+        if valid == nil && !service {
             if history[peer] == nil { history[peer] = [:] }
-            history[peer]?[message.id.id] = FGHistory(id: message.id.id, date: message.timestamp, actor: actor, text: message.text, media: media, seconds: seconds, reference: reference)
+            history[peer]?[message.id.id] = FGHistory(id: message.id.id, date: message.timestamp, actor: actor, text: message.text, media: media, seconds: seconds, reference: reference, unread: !message.attributes.compactMap { $0 as? ConsumableContentMessageAttribute }.contains(where: { $0.consumed }))
             if fresh && !wasKnown && actor != own { onIncoming?(message.text, peer) }
         }
         messages[message.id.id] = message
@@ -161,6 +169,7 @@ final class FGStore {
         fields["clock"] = String(clock); fields["nonce"] = UUID().uuidString.lowercased()
         let op = FGOp(kind: kind, entity: entity, data: fields), text = try FGCore.message(human, op)
         prefs.set(clock, forKey: "lamport")
+        if kind == "hug" { FGHug.show(prefs) }
         let subject = reply.map { EngineMessageReplySubject(messageId: $0, quote: nil, innerSubject: nil) }
         let _ = context.engine.messages.enqueueOutgoingMessage(to: id(peer), replyTo: subject, content: .text(text: text, entities: [])).startStandalone(next: { [weak self] _ in
             // Local enqueue is not a server acknowledgement: only a subsequent

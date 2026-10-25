@@ -40,6 +40,10 @@ private final class FGPython {
     func perform(_ request: [String: Any], completion: @escaping ([String: Any]) -> Void) {
         queue.async { [self] in
             var response: [String: Any]
+            let prefs = (request["account"] as? Int64).map(FamilyPolicy.preferences)
+            let tracksExecution = request["action"] as? String != "metadata" && request["action"] as? String != "unload"
+            if tracksExecution, let id = request["id"] as? String { prefs?.set(id, forKey: "plugin_running") }
+            defer { if tracksExecution { prefs?.removeObject(forKey: "plugin_running") } }
             do {
                 try boot()
                 let ensure: Ensure = try symbol("PyGILState_Ensure", Ensure.self), release: Release = try symbol("PyGILState_Release", Release.self)
@@ -82,15 +86,20 @@ final class FGPlugins {
     }
     private func save() { if let data = try? JSONEncoder().encode(records) { store.prefs.set(data, forKey: "plugins") } }
     private func source(_ id: String) -> String { (try? String(contentsOf: folder.appendingPathComponent(id + ".plugin"), encoding: .utf8)) ?? "" }
+    private func settingValues(_ id: String) -> [String: Any] {
+        guard let data = store.prefs.data(forKey: "plugin_settings_" + id), let value = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else { return [:] }
+        return value
+    }
+    private func saveSettings(_ id: String, _ values: [String: Any]) {
+        if let data = try? JSONSerialization.data(withJSONObject: values) { store.prefs.set(data, forKey: "plugin_settings_" + id) }
+    }
     private func request(_ id: String, action: String, extra: [String: Any] = [:], completion: @escaping ([String: Any]) -> Void) {
         guard !disposed else { return }
-        var request: [String: Any] = ["action": action, "id": id, "account": store.own, "partner": store.partner, "source": source(id), "settings": store.prefs.dictionary(forKey: "plugin_settings_" + id) ?? [:]]
+        var request: [String: Any] = ["action": action, "id": id, "account": store.own, "partner": store.partner, "source": source(id), "settings": settingValues(id)]
         request.merge(extra) { _, value in value }
-        store.prefs.set(id, forKey: "plugin_running")
         FGPython.shared.perform(request) { [weak self] response in
             guard let self, !self.disposed else { return }
-            self.store.prefs.removeObject(forKey: "plugin_running")
-            if let settings = response["settings"] as? [String: Any] { self.store.prefs.set(settings, forKey: "plugin_settings_" + id) }
+            if let settings = response["settings"] as? [String: Any] { self.saveSettings(id, settings) }
             if let error = response["error"] as? String { self.setEnabled(id, false); self.store.prefs.set(error, forKey: "plugin_error_" + id) }
             completion(response)
         }
@@ -101,6 +110,7 @@ final class FGPlugins {
     }
     func install(_ source: String, info: [String: Any]) throws {
         guard let id = info["id"] as? String, FGCore.matches(id, "^[A-Za-z][A-Za-z0-9_-]{1,31}$"), let name = info["name"] as? String, records.count < 50 || records.contains(where: { $0.id == id }) else { throw FGError.invalid("Неверный плагин или достигнут лимит 50") }
+        if records.contains(where: { $0.id == id }) { setEnabled(id, false) }
         try source.write(to: folder.appendingPathComponent(id + ".plugin"), atomically: true, encoding: .utf8)
         records.removeAll { $0.id == id }; records.append(FGPluginRecord(id: id, name: name, description: info["description"] as? String ?? "", enabled: false)); save()
     }
@@ -110,8 +120,8 @@ final class FGPlugins {
     }
     func setEnabled(_ id: String, _ enabled: Bool) { if let index = records.firstIndex(where: { $0.id == id }) { records[index].enabled = enabled; save() }; if !enabled { FGPython.shared.perform(["action": "unload", "account": store.own, "id": id]) { _ in } } }
     func remove(_ id: String) { setEnabled(id, false); records.removeAll { $0.id == id }; try? FileManager.default.removeItem(at: folder.appendingPathComponent(id + ".plugin")); store.prefs.removeObject(forKey: "plugin_settings_" + id); save() }
-    func settings(_ id: String, completion: @escaping ([[String: Any]], String?) -> Void) { request(id, action: "settings") { response in completion(response["rows"] as? [[String: Any]] ?? [], response["error"] as? String) } }
-    func setSetting(_ id: String, key: String, value: Any) { var settings = store.prefs.dictionary(forKey: "plugin_settings_" + id) ?? [:]; settings[key] = value; store.prefs.set(settings, forKey: "plugin_settings_" + id) }
+    func settings(_ id: String, completion: @escaping ([[String: Any]], String?) -> Void) { guard store.prefs.bool(forKey: "plugins_enabled"), records.contains(where: { $0.id == id && $0.enabled }) else { completion([], "Сначала включите движок и этот плагин"); return }; request(id, action: "settings") { response in completion(response["rows"] as? [[String: Any]] ?? [], response["error"] as? String) } }
+    func setSetting(_ id: String, key: String, value: Any) { var settings = settingValues(id); settings[key] = value; saveSettings(id, settings) }
     func intercept(_ text: String, peer: Int64, completion: @escaping (String?) -> Void) {
         guard store.prefs.bool(forKey: "plugins_enabled"), FGCore.fromMessage(text) == nil, !text.isEmpty else { completion(text); return }
         let enabled = records.filter { $0.enabled }.map { $0.id }
@@ -159,7 +169,7 @@ final class FGPluginPicker: NSObject, UIDocumentPickerDelegate {
     func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
         guard let url = urls.first, ["py", "plugin"].contains(url.pathExtension.lowercased()) else { return }
         let accessed = url.startAccessingSecurityScopedResource(); defer { if accessed { url.stopAccessingSecurityScopedResource() } }
-        guard let data = try? Data(contentsOf: url), data.count <= 262144, let source = String(data: data, encoding: .utf8) else { return }
+        guard let size = try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize, size <= 262144, let data = try? Data(contentsOf: url), data.count <= 262144, let source = String(data: data, encoding: .utf8) else { return }
         plugins.metadata(source) { [weak self] info, error in
             guard let self, let owner = self.owner else { return }
             let title = info?["name"] as? String ?? "Неверный плагин"

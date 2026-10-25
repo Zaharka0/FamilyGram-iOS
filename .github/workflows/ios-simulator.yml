@@ -34,6 +34,14 @@ jobs:
       - name: Check macOS, Xcode and disk space
         run: python3 scripts/preflight.py
       - run: python3 -m pip install -r requirements.txt
+      - name: Restore Bazel compilation cache
+        id: bazel-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: build/bazel-cache
+          key: ios-bazel-${{ runner.os }}-${{ hashFiles('upstream.json') }}-${{ hashFiles('overlay/**', 'scripts/**') }}
+          restore-keys: |
+            ios-bazel-${{ runner.os }}-${{ hashFiles('upstream.json') }}-
       - name: Prepare checksum-verified embedded Python
         run: python3 scripts/python_runtime.py
       - name: Fetch pinned Telegram source and its submodules
@@ -55,6 +63,12 @@ jobs:
           path: dist/
           if-no-files-found: error
           retention-days: 14
+      - name: Save reusable Bazel outputs
+        if: always() && steps.bazel-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: build/bazel-cache
+          key: ${{ steps.bazel-cache.outputs.cache-primary-key }}
       - name: Remove private configuration
         if: always()
         run: python3 -c "from pathlib import Path; Path('build/configuration.json').unlink(missing_ok=True)"

@@ -66,7 +66,7 @@ final class FamilyHubController: ViewController, UISearchBarDelegate {
     }
     override func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
-        store.changed = { [weak self] in self?.render() }; store.incomingHug = { [weak self] in self?.hugEffect() }
+        store.changed = { [weak self] in self?.render() }
         privacy.sync(); if peer != 0 { store.sync(peer) }; render()
         if let selectedMessage { self.selectedMessage = nil; DispatchQueue.main.async { [weak self] in self?.newEvent(selectedMessage) } }
         if store.prefs.bool(forKey: "updates_auto"), Date().timeIntervalSince1970 - store.prefs.double(forKey: "updates_checked") > 86400 {
@@ -233,18 +233,10 @@ final class FamilyHubController: ViewController, UISearchBarDelegate {
         }
     }
     private func hugs() {
-        row("🤗 Обнимаю", "Отправить тёплое объятие") { [weak self] in guard let self else { return }; try self.send("hug", human: "🤗 Обнимаю тебя!"); self.hugEffect() }
-        for card in store.cards(peer, kind: "hug").prefix(30) { row("🤗 " + name(card.origin.actor), date(Int64(card.origin.date) * 1000) + " · Обнять в ответ") { [weak self] in guard let self else { return }; try self.send("hug", human: "🤗 Обнимаю в ответ!"); self.hugEffect() } }
+        row("🤗 Обнимаю", "Отправить тёплое объятие") { [weak self] in guard let self else { return }; try self.send("hug", human: "🤗 Обнимаю тебя!") }
+        for card in store.cards(peer, kind: "hug").prefix(30) { row("🤗 " + name(card.origin.actor), date(Int64(card.origin.date) * 1000) + " · Обнять в ответ") { [weak self] in guard let self else { return }; try self.send("hug", human: "🤗 Обнимаю в ответ!") } }
     }
-    func hugEffect() {
-        guard !store.prefs.bool(forKey: "motion_disabled") else { return }
-        UIImpactFeedbackGenerator(style: .soft).impactOccurred()
-        let label = UILabel(frame: view.bounds); label.text = "🤗 ❤️"; label.font = .systemFont(ofSize: 65); label.textAlignment = .center; label.isUserInteractionEnabled = false
-        view.addSubview(label)
-        guard !UIAccessibility.isReduceMotionEnabled else { DispatchQueue.main.asyncAfter(deadline: .now() + 1) { label.removeFromSuperview() }; return }
-        label.alpha = 0; label.transform = CGAffineTransform(scaleX: 0.6, y: 0.6)
-        UIView.animate(withDuration: 0.3, animations: { label.alpha = 1; label.transform = .identity }) { _ in UIView.animate(withDuration: 0.6, delay: 0.5, animations: { label.alpha = 0; label.transform = CGAffineTransform(translationX: 0, y: -90) }) { _ in label.removeFromSuperview() } }
-    }
+
     private func question() {
         guard peer > 0 else { text("Вопрос дня доступен в личном чате пары"); return }
         let id = FGCore.questionID(); text(FGCore.question(id), large: true)
@@ -278,7 +270,7 @@ final class FamilyHubController: ViewController, UISearchBarDelegate {
                     button.backgroundColor = .secondarySystemGroupedBackground; button.layer.cornerRadius = 10; button.heightAnchor.constraint(equalToConstant: 48).isActive = true
                     button.isEnabled = game.turn == store.own
                     button.accessibilityLabel = "Строка \(y+1), столбец \(x+1): \(game.cells[index])"
-                    button.addAction(UIAction { [weak self] _ in guard let self, self.store.accept("move:" + card.op.entity) else { return }; do { try self.send("move", entity: card.op.entity, human: "🎮 Ход \(move + 1)", fields: ["cell": String(move)]); button.isEnabled = false } catch { self.alert(error.localizedDescription) } }, for: .touchUpInside)
+                    button.addAction(UIAction { [weak self, weak button] _ in guard let self, self.store.accept("move:" + card.op.entity) else { return }; do { try self.send("move", entity: card.op.entity, human: "🎮 Ход \(move + 1)", fields: ["cell": String(move)]); button?.isEnabled = false } catch { self.alert(error.localizedDescription) } }, for: .touchUpInside)
                     line.addArrangedSubview(button)
                 }
             }
@@ -356,7 +348,7 @@ final class FamilyHubController: ViewController, UISearchBarDelegate {
     private func voice() {
         coverage()
         toggle("Пропуск пауз", "Определяем длинные тихие участки по волне голосового. Без волны паузы не пропускаются", key: "voice_skip_silence")
-        let unread = store.rows(peer).filter { $0.media == 3 && $0.actor != store.own && !store.prefs.bool(forKey: "heard_\(peer)_\($0.id)") }.sorted { $0.id < $1.id }
+        let unread = store.rows(peer).filter { $0.media == 3 && $0.actor != store.own && (($0.unread ?? true) || store.prefs.double(forKey: "voice_\(peer)_\($0.id)") > 0) && !store.prefs.bool(forKey: "heard_\(peer)_\($0.id)") }.sorted { $0.id < $1.id }
         row("▶ Очередь голосовых · \(unread.count)", "Продолжение с сохранённой позиции на этом iPhone") { [weak self] in guard let self else { return }; FGVoice.get(self.store).play(self.peer, queue: unread) }
         row("Остановить очередь") { [weak self] in guard let self else { return }; FGVoice.get(self.store).stop() }
         for (index, item) in unread.prefix(200).enumerated() {

@@ -73,9 +73,18 @@ final class FGPrivacy {
                 guard values.count == ids.count, values.allSatisfy({ $0 != nil }) else { self.finish(enabled: enabled, success: false); return }
                 var peers: [EnginePeer.Id: SelectivePrivacyPeer] = [:]
                 for peer in values.compactMap({ $0 }) { peers[peer.id] = SelectivePrivacyPeer(peer: peer, participantCount: nil) }
-                self.lifetime = (self.store.context.engine.privacy.updateSelectiveAccountPrivacySettings(type: .presence, settings: target.settings(peers))
-                |> then(self.store.context.engine.privacy.requestAccountPrivacySettings()) |> take(1) |> deliverOnMainQueue).start(next: { [weak self] confirmed in
-                    self?.finish(enabled: enabled, success: FGPrivacySnapshot(confirmed.presence) == target)
+                let engine = self.store.context.engine.privacy
+                let settings = target.settings(peers)
+                let expectedTarget = target
+                let confirmation = Signal<AccountPrivacySettings, NoError> { subscriber in
+                    let subscriptions = DisposableSet()
+                    subscriptions.add(engine.updateSelectiveAccountPrivacySettings(type: .presence, settings: settings).start(completed: {
+                        subscriptions.add(engine.requestAccountPrivacySettings().start(next: { subscriber.putNext($0) }, completed: { subscriber.putCompletion() }))
+                    }))
+                    return subscriptions
+                }
+                self.lifetime = (confirmation |> take(1) |> deliverOnMainQueue).start(next: { [weak self] confirmed in
+                    self?.finish(enabled: enabled, success: FGPrivacySnapshot(confirmed.presence) == expectedTarget)
                 })
             })
         })

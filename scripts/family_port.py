@@ -69,6 +69,8 @@ def integrate(source, changes):
         '            |> afterNext { _ in',
         '                if threadId == nil, peerId.namespace != Namespaces.Peer.SecretChat { NotificationCenter.default.post(name: Notification.Name("FamilyGramClearHistory"), object: nil, userInfo: ["account": NSNumber(value: self.account.peerId.id._internalGetInt64Value()), "peer": NSNumber(value: FamilyPolicy.identifier(peerId))]) }',
         '            }']))
+    edit(engine, '        public func markMessageContentAsConsumedInteractively(messageId: MessageId) -> Signal<Void, NoError> {', '''        public func markMessageContentAsConsumedInteractively(messageId: MessageId) -> Signal<Void, NoError> {
+            if messageId.peerId.namespace != Namespaces.Peer.SecretChat && FamilyPolicy.blocks("ghost_read", account: self.account.peerId.id._internalGetInt64Value(), peer: FamilyPolicy.identifier(messageId.peerId)) { return .single(()) }''')
     # Also cover automatic read actions that call the internal transaction path.
     read = 'submodules/TelegramCore/Sources/TelegramEngine/Messages/ApplyMaxReadIndexInteractively.swift'
     edit(read, 'func _internal_applyMaxReadIndexInteractively(transaction: Transaction, stateManager: AccountStateManager, index: MessageIndex) {', '''func _internal_applyMaxReadIndexInteractively(transaction: Transaction, stateManager: AccountStateManager, index: MessageIndex) {
@@ -92,6 +94,7 @@ def integrate(source, changes):
     edit(chat, '    func sendMessages(_ messages: [EnqueueMessage], media: Bool = false, postpone: Bool = false, commit: Bool = false) {', '''    func sendMessages(_ messages: [EnqueueMessage], media: Bool = false, postpone: Bool = false, commit: Bool = false, familygramBypass: Bool = false) {
         if !familygramBypass, let peer = self.chatLocation.peerId, peer.namespace == Namespaces.Peer.CloudUser {
             FGPlugins.interceptMessages(messages, context: self.context, peer: peer.id._internalGetInt64Value()) { [weak self] result in
+                if result.isEmpty { return }
                 self?.sendMessages(result, media: media, postpone: postpone, commit: commit, familygramBypass: true)
             }
             return

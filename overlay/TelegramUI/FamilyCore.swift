@@ -174,8 +174,12 @@ enum FGCore {
         return String(text[..<range.lowerBound])
     }
     static func cents(_ text: String) throws -> Int64 {
-        let value = text.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: ",", with: ".")
-        guard matches(value, "^[+]?[0-9]+(?:\\.[0-9]+)?$"), let decimal = Decimal(string: value, locale: Locale(identifier: "en_US_POSIX")) else { throw FGError.invalid("Введите положительную сумму") }
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines).replacingOccurrences(of: ",", with: ".")
+        let value = trimmed.unicodeScalars.map { scalar -> String in
+            if scalar.value <= 0xffff, CharacterSet.decimalDigits.contains(scalar), let digit = Character(String(scalar)).wholeNumberValue { return String(digit) }
+            return String(scalar)
+        }.joined()
+        guard matches(value, "^[+-]?(?:[0-9]+(?:\\.[0-9]*)?|\\.[0-9]+)(?:[eE][+-]?[0-9]+)?$"), let decimal = Decimal(string: value, locale: Locale(identifier: "en_US_POSIX")) else { throw FGError.invalid("Введите положительную сумму") }
         let n = NSDecimalNumber(decimal: decimal * 100)
         let cents = n.int64Value
         guard cents > 0, cents <= 100_000_000_000_000, n == NSDecimalNumber(value: cents) else { throw FGError.invalid("Сумма должна быть точной до копейки") }

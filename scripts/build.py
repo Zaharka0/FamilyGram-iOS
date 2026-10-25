@@ -30,7 +30,7 @@ def build(source, config, output, number, target="device"):
     artifacts = ROOT / 'build' / f'artifacts-{target}-{number}'
     if artifacts.exists():
         raise ValueError('This build output directory already exists; choose a new build number')
-    run([sys.executable, 'build-system/Make/Make.py', 'build',
+    run([sys.executable, 'build-system/Make/Make.py', '--cacheDir', ROOT / 'build/bazel-cache', 'build',
          '--configurationPath', config, '--xcodeManagedCodesigning',
          '--familygramUnsigned', '--buildNumber', number, '--configuration', 'release_sim_arm64' if target == 'simulator' else 'release_arm64',
          '--outputBuildArtifactsPath', artifacts], cwd=source)
