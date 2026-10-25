@@ -173,14 +173,14 @@ final class FGStore {
         prefs.set(clock, forKey: "lamport")
         if kind == "hug" { FGHug.show(prefs) }
         let subject = reply.map { EngineMessageReplySubject(messageId: $0, quote: nil, innerSubject: nil) }
-        let _ = context.engine.messages.enqueueOutgoingMessage(to: id(peer), replyTo: subject, content: .text(text: text, entities: [])).startStandalone(next: { [weak self] _ in
+        let _ = context.engine.messages.enqueueOutgoingMessage(to: id(peer), replyTo: subject, content: .text(text, [])).startStandalone(next: { [weak self] _ in
             // Local enqueue is not a server acknowledgement: only a subsequent
             // confirmed history message may enter the shared reducer.
             DispatchQueue.main.asyncAfter(deadline: .now() + 1) { self?.sync(peer) }
         })
     }
     func normal(_ peer: Int64, text: String) {
-        let _ = context.engine.messages.enqueueOutgoingMessage(to: id(peer), replyTo: nil, content: .text(text: text, entities: [])).startStandalone()
+        let _ = context.engine.messages.enqueueOutgoingMessage(to: id(peer), replyTo: nil, content: .text(text, [])).startStandalone()
     }
     func sync(_ peer: Int64, all: Bool = false, continuation: Bool = false) {
         guard alive, peer != 0, peer != own, scans[peer] == nil else { return }

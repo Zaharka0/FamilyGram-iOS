@@ -36,7 +36,7 @@ final class FGMediaFetch {
             }
         }
         disposables.add(store.context.engine.resources.fetchedResource(resource: resource).start(error: { _ in finish(nil) }))
-        disposables.add((store.context.engine.resources.data(resource: resource, waitUntilFetchStatus: true) |> filter { $0.complete } |> take(1) |> deliverOnMainQueue).start(next: { data in finish(URL(fileURLWithPath: data.path)) }))
+        disposables.add((store.context.engine.resources.data(resource: resource, waitUntilFetchStatus: true) |> filter { $0.isComplete } |> take(1) |> deliverOnMainQueue).start(next: { data in finish(URL(fileURLWithPath: data.path)) }))
     }
 }
 
