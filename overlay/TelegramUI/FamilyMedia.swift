@@ -170,7 +170,7 @@ final class FGWatchController: UIViewController {
     private func presence(_ connected: Bool) { lastHeartbeat = ProcessInfo.processInfo.systemUptime; try? store.send(peer, kind: "video_presence", entity: entity, human: "FamilyGram", fields: ["joined": connected ? "1" : "0"]) }
     private func disconnect() { guard joined else { return }; joined = false; presence(false); timer?.invalidate(); timer = nil; player.player?.pause() }
     private func publish(playing: Bool, position: Double) {
-        guard joined, position.isFinite, position >= 0 else { return }
+        guard joined, position.isFinite, position >= 0, store.accept("watch-control:" + entity, delay: 0.45) else { return }
         let millis = Int64(min(86_400, position) * 1000)
         do { try store.send(peer, kind: "video", entity: entity, human: "🎬 " + (playing ? "Пуск" : "Пауза"), fields: ["ref": ref, "message": String(message.id.id), "position": String(millis), "playing": playing ? "1" : "0"], reply: message.id) }
         catch { status.text = error.localizedDescription }

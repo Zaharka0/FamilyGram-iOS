@@ -445,7 +445,7 @@ final class FamilyHubController: ViewController, UISearchBarDelegate {
     private func pluginsPage() {
         let plugins = FGPlugins.get(store)
         text("Плагины Python · FamilyGram SDK 1", large: true)
-        toggle("Включить движок плагинов", "Доверенный код внутри приложения. Доступен только вашему аккаунту", key: "plugins_enabled")
+        toggle("Включить движок плагинов", "Доверенный код внутри приложения. Доступен только вашему аккаунту", key: "plugins_enabled") { [weak self] in if self?.store.prefs.bool(forKey: "plugins_enabled") != true { plugins.suspend() } }
         row("Импортировать .py / .plugin") { [weak self] in guard let self else { return }; let picker = FGPluginPicker(owner: self, plugins: plugins) { [weak self] in self?.render() }; self.pluginPicker = picker; picker.open() }
         row("Установить пример Heart signature") { [weak self] in guard let self else { return }; plugins.installExample { [weak self] error in if let error { self?.alert(error) } else { self?.render() } } }
         text("Android Java/Xposed API на iOS недоступен. Плагины, использующие только FamilyGram SDK 1 и Python, поддерживаются; платформенные плагины требуют адаптации.")

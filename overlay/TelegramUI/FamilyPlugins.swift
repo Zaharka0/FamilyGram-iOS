@@ -128,9 +128,15 @@ final class FGPlugins {
         guard !enabled.isEmpty else { completion(text); return }
         var delivered = false
         let deliver: (String?) -> Void = { value in if !delivered { delivered = true; completion(value) } }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [weak self] in if !delivered { self?.store.prefs.set(false, forKey: "plugins_enabled"); deliver(text) } }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2.5) { [weak self] in
+            guard !delivered else { return }
+            guard let self, self.store.alive else { deliver(nil); return }
+            self.store.prefs.set(false, forKey: "plugins_enabled"); deliver(text)
+        }
         func next(_ index: Int, _ value: String) {
             guard !delivered else { return }
+            guard store.alive else { deliver(nil); return }
+            guard store.prefs.bool(forKey: "plugins_enabled") else { deliver(text); return }
             if index == enabled.count { deliver(value); return }
             request(enabled[index], action: "send", extra: ["text": value, "peer": peer]) { response in
                 if response["error"] != nil { deliver(text) }
@@ -139,6 +145,9 @@ final class FGPlugins {
             }
         }
         next(0, text)
+    }
+    func suspend() {
+        for record in records { FGPython.shared.perform(["action": "unload", "account": store.own, "id": record.id]) { _ in } }
     }
     func receive(_ text: String, peer: Int64) { guard store.prefs.bool(forKey: "plugins_enabled"), FGCore.fromMessage(text) == nil else { return }; for record in records where record.enabled { request(record.id, action: "receive", extra: ["text": text, "peer": peer]) { _ in } } }
     func dispose() { for record in records { FGPython.shared.perform(["action": "unload", "account": store.own, "id": record.id]) { _ in } }; disposed = true; try? FileManager.default.removeItem(at: folder); Self.instances.removeValue(forKey: store.own) }

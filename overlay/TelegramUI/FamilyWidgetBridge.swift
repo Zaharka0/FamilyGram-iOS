@@ -35,12 +35,15 @@ final class FGWidgetPhotoPicker: NSObject, PHPickerViewControllerDelegate {
     func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
         picker.dismiss(animated: true)
         results.first?.itemProvider.loadObject(ofClass: UIImage.self) { [weak self] object, _ in
-            guard let self, let image = object as? UIImage,
-                  let folder = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: FGWidgetBridge.group) else { return }
-            let renderer = UIGraphicsImageRenderer(size: CGSize(width: 600, height: 600))
-            let thumbnail = renderer.image { _ in let side = min(image.size.width, image.size.height); let scale = 600 / max(1, side); let size = CGSize(width: image.size.width * scale, height: image.size.height * scale); image.draw(in: CGRect(x: (600-size.width)/2, y: (600-size.height)/2, width: size.width, height: size.height)) }
-            if let data = thumbnail.jpegData(compressionQuality: 0.88) { try? data.write(to: folder.appendingPathComponent("FamilyPairPhoto-\(self.store.own).jpg"), options: .atomic) }
-            DispatchQueue.main.async { self.completion() }
+            guard let image = object as? UIImage else { return }
+            DispatchQueue.main.async { [weak self] in
+                guard let self, self.store.alive,
+                      let folder = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: FGWidgetBridge.group) else { return }
+                let renderer = UIGraphicsImageRenderer(size: CGSize(width: 600, height: 600))
+                let thumbnail = renderer.image { _ in let side = min(image.size.width, image.size.height); let scale = 600 / max(1, side); let size = CGSize(width: image.size.width * scale, height: image.size.height * scale); image.draw(in: CGRect(x: (600-size.width)/2, y: (600-size.height)/2, width: size.width, height: size.height)) }
+                if let data = thumbnail.jpegData(compressionQuality: 0.88) { try? data.write(to: folder.appendingPathComponent("FamilyPairPhoto-\(self.store.own).jpg"), options: .atomic) }
+                self.completion()
+            }
         }
     }
 }
