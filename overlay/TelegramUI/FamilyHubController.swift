@@ -55,7 +55,7 @@ final class FamilyHubController: ViewController, UISearchBarDelegate {
             self.presentationData = value
             self.statusBar.statusBarStyle = value.theme.rootController.statusBarStyle.style
             self.overrideUserInterfaceStyle = value.theme.overallDarkAppearance ? .dark : .light
-            self.navigationBar?.updatePresentationData(NavigationBarPresentationData(presentationData: value))
+            self.navigationBar?.updatePresentationData(NavigationBarPresentationData(presentationData: value), transition: .immediate)
             if self.isNodeLoaded { self.displayNode.backgroundColor = value.theme.list.blocksBackgroundColor; self.render() }
         })
     }
@@ -150,9 +150,9 @@ final class FamilyHubController: ViewController, UISearchBarDelegate {
             else { self.store.prefs.set(id, forKey: "workspace_peer"); if kind == "partner" { self.store.partner = id; self.privacy.sync() }; self.store.sync(id) }
             controller?.dismiss(); self.render()
         }
-        push(controller)
+        pushFamilyController(controller)
     }
-    private func push(_ controller: ViewController) { (navigationController as? NavigationController)?.pushViewController(controller) }
+    private func pushFamilyController(_ controller: ViewController) { (navigationController as? NavigationController)?.pushViewController(controller) }
     private func send(_ kind: String, entity: String = UUID().uuidString.lowercased(), human: String, fields: [String: String] = [:], reply: EngineMessage.Id? = nil) throws { try store.send(peer, kind: kind, entity: entity, human: human, fields: fields, reply: reply) }
     private func date(_ timestamp: Int64) -> String { DateFormatter.localizedString(from: Date(timeIntervalSince1970: Double(timestamp) / 1000), dateStyle: .medium, timeStyle: .short) }
     private func coverage() {
@@ -171,7 +171,7 @@ final class FamilyHubController: ViewController, UISearchBarDelegate {
         if page != "home" { row("‹ Все разделы") { [weak self] in self?.open("home") } }
         if page == "settings" { settingsPage(); return }
         if page == "sections" { sectionPage(); return }
-        if page == "icons" { push(themeSettingsController(context: store.context, focusOnItemTag: .icon)); page = "home"; return }
+        if page == "icons" { pushFamilyController(themeSettingsController(context: store.context, focusOnItemTag: .icon)); page = "home"; return }
         if page == "updates" { updatesPage(); return }
         if page == "plugins" { pluginsPage(); return }
         if page == "widget" { widgetPage(); return }

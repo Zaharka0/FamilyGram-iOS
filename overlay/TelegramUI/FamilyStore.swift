@@ -86,7 +86,7 @@ final class FGStore {
         DispatchQueue.main.async { [weak self] in self?.privacy.sync(); if let self { FGUpdates.automatic(self) } }
     }
     func id(_ peer: Int64) -> EnginePeer.Id {
-        let namespace: PeerId.Namespace = peer > 0 ? Namespaces.Peer.CloudUser : ((prefs.object(forKey: "dialog_namespace_\(peer)") as? NSNumber).map { PeerId.Namespace._internalFromInt32Value($0.int32Value) } ?? Namespaces.Peer.CloudChannel)
+        let namespace: EnginePeer.Id.Namespace = peer > 0 ? Namespaces.Peer.CloudUser : ((prefs.object(forKey: "dialog_namespace_\(peer)") as? NSNumber).map { EnginePeer.Id.Namespace._internalFromInt32Value($0.int32Value) } ?? Namespaces.Peer.CloudChannel)
         return EnginePeer.Id(namespace: namespace, id: EnginePeer.Id.Id._internalFromInt64Value(abs(peer)))
     }
     func dialog(_ peer: EnginePeer.Id) -> Int64 {
