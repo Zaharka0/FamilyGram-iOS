@@ -78,3 +78,12 @@ for input in [events, Array(events.reversed()), events.map { FGEntry(id: $0.id +
     expect(actual == expected, "Swift reduced state differs from actual Android state: \(actual)")
 }
 print("Cross-client ledger matched Android for forward/reverse arrival and different per-client message IDs")
+
+expect(FGReleasePolicy.newer("familygram-1.3.0-b8", version: "1.3.0", build: 7), "Same-version rebuild was not detected")
+expect(!FGReleasePolicy.newer("familygram-1.3.0-b7", version: "1.3.0", build: 7), "Installed build must not be offered again")
+expect(FGReleasePolicy.newer("v1.4.0", version: "1.3.0", build: 100), "Higher semantic version rejected")
+expect(FGReleasePolicy.trustedIPA("https://github.com/Zaharka0/FamilyGram-iOS/releases/download/familygram-1.3.0-b8/FamilyGram.ipa") != nil, "Valid release IPA rejected")
+for bad in ["http://github.com/Zaharka0/FamilyGram-iOS/releases/download/v1.3.0/app.ipa", "https://github.com/other/repo/releases/download/v1.3.0/app.ipa", "https://github.com/Zaharka0/FamilyGram-iOS/releases/download/v1.3.0/%2e%2e/app.ipa", "https://github.com/Zaharka0/FamilyGram-iOS/releases/download/v1.3.0/app.ipa?token=bad"] {
+    expect(FGReleasePolicy.trustedIPA(bad) == nil, "Unsafe release URL accepted")
+}
+print("iOS release version/build and IPA URL policy passed")

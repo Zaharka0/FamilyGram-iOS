@@ -39,7 +39,7 @@ jobs:
       - name: Compile and test the real Swift protocol core against Android vectors
         run: |
           mkdir -p build
-          swiftc overlay/TelegramUI/FamilyCore.swift tests/swift/main.swift -o build/family-core-tests
+          swiftc overlay/TelegramUI/FamilyCore.swift overlay/TelegramUI/FamilyReleasePolicy.swift tests/swift/main.swift -o build/family-core-tests
           build/family-core-tests tests/fixtures/fg1-android-vectors.json
       - name: Parse all native Swift overlays
         run: |

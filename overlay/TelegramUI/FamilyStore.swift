@@ -58,7 +58,7 @@ final class FGStore {
         try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
         if let data = try? Data(contentsOf: folder.appendingPathComponent("ops.json")), let value = try? JSONDecoder().decode([Int64: [Int32: FGEntry]].self, from: data) { entries = value }
         if let data = try? Data(contentsOf: folder.appendingPathComponent("history.json")), let value = try? JSONDecoder().decode([Int64: [Int32: FGHistory]].self, from: data) { history = value }
-        lifecycle.append(NotificationCenter.default.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in self?.privacy.sync() })
+        lifecycle.append(NotificationCenter.default.addObserver(forName: UIApplication.didBecomeActiveNotification, object: nil, queue: .main) { [weak self] _ in self?.privacy.sync(); if let self { FGUpdates.automatic(self) } })
         lifecycle.append(NotificationCenter.default.addObserver(forName: Notification.Name("FamilyGramLogout"), object: nil, queue: .main) { [weak self] note in
             guard let self, (note.object as? NSNumber)?.int64Value == self.context.account.id.int64 else { return }; self.logout()
         })
@@ -83,7 +83,7 @@ final class FGStore {
             self.prefs.removeObject(forKey: "complete_\(peer)"); self.persist(); self.changed?()
         })
         onIncoming = { [weak self] text, peer in guard let self, self.alive else { return }; FGPlugins.get(self).receive(text, peer: peer) }
-        DispatchQueue.main.async { [weak self] in self?.privacy.sync() }
+        DispatchQueue.main.async { [weak self] in self?.privacy.sync(); if let self { FGUpdates.automatic(self) } }
     }
     func id(_ peer: Int64) -> EnginePeer.Id {
         let namespace: Int32 = peer > 0 ? Namespaces.Peer.CloudUser : (prefs.object(forKey: "dialog_namespace_\(peer)") as? NSNumber)?.int32Value ?? Namespaces.Peer.CloudChannel

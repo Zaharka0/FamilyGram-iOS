@@ -36,6 +36,7 @@ jobs:
       - run: python3 -m pip install -r requirements.txt
       - name: Restore Bazel compilation cache
         id: bazel-cache
+        continue-on-error: true
         uses: actions/cache/restore@v4
         with:
           path: build/bazel-cache
@@ -64,7 +65,8 @@ jobs:
           if-no-files-found: error
           retention-days: 14
       - name: Save reusable Bazel outputs
-        if: always() && steps.bazel-cache.outputs.cache-hit != 'true'
+        if: always() && steps.bazel-cache.outcome == 'success' && steps.bazel-cache.outputs.cache-hit != 'true'
+        continue-on-error: true
         uses: actions/cache/save@v4
         with:
           path: build/bazel-cache

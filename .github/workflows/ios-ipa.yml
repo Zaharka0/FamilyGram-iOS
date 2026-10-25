@@ -9,6 +9,11 @@ on:
         required: true
         default: org.familygram.ios
         type: string
+      publish_release:
+        description: Publish this successful main build to GitHub Releases for in-app updates
+        required: false
+        default: false
+        type: boolean
 permissions:
   contents: read
 concurrency:
@@ -38,6 +43,7 @@ jobs:
       - run: python3 -m pip install -r requirements.txt
       - name: Restore Bazel compilation cache
         id: bazel-cache
+        continue-on-error: true
         uses: actions/cache/restore@v4
         with:
           path: build/bazel-cache
@@ -66,7 +72,8 @@ jobs:
           if-no-files-found: error
           retention-days: 14
       - name: Save reusable Bazel outputs
-        if: always() && steps.bazel-cache.outputs.cache-hit != 'true'
+        if: always() && steps.bazel-cache.outcome == 'success' && steps.bazel-cache.outputs.cache-hit != 'true'
+        continue-on-error: true
         uses: actions/cache/save@v4
         with:
           path: build/bazel-cache
@@ -74,3 +81,29 @@ jobs:
       - name: Remove private configuration
         if: always()
         run: python3 -c "from pathlib import Path; Path('build/configuration.json').unlink(missing_ok=True)"
+  publish:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.publish_release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: FamilyGram-iOS-AltStore
+          path: dist
+      - name: Validate artifact identity and derive the FamilyGram release tag
+        env:
+          FAMILYGRAM_BUILD_NUMBER: ${{ github.run_number }}
+        run: python3 scripts/release.py
+      - name: Publish the compiled IPA and checksum
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_COMMIT: ${{ github.sha }}
+        run: |
+          tag="$(cat dist/release-tag.txt)"
+          gh release create "$tag" dist/FamilyGram.ipa dist/FamilyGram.ipa.sha256 dist/FamilyGram.json --target "$RELEASE_COMMIT" --title "$tag" --notes-file dist/release-notes.md

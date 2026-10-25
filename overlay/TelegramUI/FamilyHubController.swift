@@ -69,9 +69,7 @@ final class FamilyHubController: ViewController, UISearchBarDelegate {
         store.changed = { [weak self] in self?.render() }
         privacy.sync(); if peer != 0 { store.sync(peer) }; render()
         if let selectedMessage { self.selectedMessage = nil; DispatchQueue.main.async { [weak self] in self?.newEvent(selectedMessage) } }
-        if store.prefs.bool(forKey: "updates_auto"), Date().timeIntervalSince1970 - store.prefs.double(forKey: "updates_checked") > 86400 {
-            store.prefs.set(Date().timeIntervalSince1970, forKey: "updates_checked"); FGUpdates.check(owner: self)
-        }
+        FGUpdates.automatic(store)
         poll?.invalidate(); poll = Foundation.Timer.scheduledTimer(withTimeInterval: 5, repeats: true) { [weak self] _ in guard let self else { return }; if self.peer != 0 { self.store.sync(self.peer) } }
     }
     override func viewDidDisappear(_ animated: Bool) { super.viewDidDisappear(animated); poll?.invalidate(); poll = nil }
