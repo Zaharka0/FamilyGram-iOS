@@ -1,6 +1,5 @@
 import Foundation
 import UIKit
-import PhotosUI
 import WidgetKit
 
 final class FGWidgetBridge {
@@ -23,27 +22,28 @@ final class FGWidgetBridge {
     }
 }
 
-final class FGWidgetPhotoPicker: NSObject, PHPickerViewControllerDelegate {
+final class FGWidgetPhotoPicker: NSObject, UIImagePickerControllerDelegate, UINavigationControllerDelegate {
     private weak var owner: UIViewController?
     private let store: FGStore
     private let completion: () -> Void
     init(owner: UIViewController, store: FGStore, completion: @escaping () -> Void) { self.owner = owner; self.store = store; self.completion = completion }
     func open() {
-        var configuration = PHPickerConfiguration(); configuration.selectionLimit = 1; configuration.filter = .images
-        let picker = PHPickerViewController(configuration: configuration); picker.delegate = self; owner?.present(picker, animated: true)
+        let picker = UIImagePickerController()
+        picker.sourceType = .photoLibrary
+        picker.delegate = self
+        owner?.present(picker, animated: true)
     }
-    func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
+    func imagePickerControllerDidCancel(_ picker: UIImagePickerController) {
         picker.dismiss(animated: true)
-        results.first?.itemProvider.loadObject(ofClass: UIImage.self) { [weak self] object, _ in
-            guard let image = object as? UIImage else { return }
-            DispatchQueue.main.async { [weak self] in
-                guard let self, self.store.alive,
-                      let folder = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: FGWidgetBridge.group) else { return }
-                let renderer = UIGraphicsImageRenderer(size: CGSize(width: 600, height: 600))
-                let thumbnail = renderer.image { _ in let side = min(image.size.width, image.size.height); let scale = 600 / max(1, side); let size = CGSize(width: image.size.width * scale, height: image.size.height * scale); image.draw(in: CGRect(x: (600-size.width)/2, y: (600-size.height)/2, width: size.width, height: size.height)) }
-                if let data = thumbnail.jpegData(compressionQuality: 0.88) { try? data.write(to: folder.appendingPathComponent("FamilyPairPhoto-\(self.store.own).jpg"), options: .atomic) }
-                self.completion()
-            }
-        }
+    }
+    func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey: Any]) {
+        picker.dismiss(animated: true)
+        guard let image = info[.originalImage] as? UIImage else { return }
+        guard store.alive,
+              let folder = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: FGWidgetBridge.group) else { return }
+        let renderer = UIGraphicsImageRenderer(size: CGSize(width: 600, height: 600))
+        let thumbnail = renderer.image { _ in let side = min(image.size.width, image.size.height); let scale = 600 / max(1, side); let size = CGSize(width: image.size.width * scale, height: image.size.height * scale); image.draw(in: CGRect(x: (600-size.width)/2, y: (600-size.height)/2, width: size.width, height: size.height)) }
+        if let data = thumbnail.jpegData(compressionQuality: 0.88) { try? data.write(to: folder.appendingPathComponent("FamilyPairPhoto-\(store.own).jpg"), options: .atomic) }
+        completion()
     }
 }
