@@ -78,7 +78,7 @@ class BuildToolsTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 device_arm64(data)
 
-    def make_ipa(self, path, platform=2, name='FamilyGram', extensions=False, unsafe=False, simulator=False, app_zip=False):
+    def make_ipa(self, path, platform=2, name='FamilyGram', extensions=False, unsafe=False, simulator=False, app_zip=False, widget=None):
         icons = {'CFBundlePrimaryIcon': {'CFBundleIconName': 'FamilyGram'},
                  'CFBundleAlternateIcons': {f'Family{i}': {'CFBundleIconFiles': [f'Family{i}']} for i in range(1, 6)}}
         info = dict(CFBundleIdentifier='org.familygram.ios', CFBundleDisplayName=name,
@@ -90,6 +90,10 @@ class BuildToolsTests(unittest.TestCase):
             archive.writestr(root + 'Telegram', binary(platform))
             if extensions:
                 archive.writestr(root + 'PlugIns/Widget.appex/Info.plist', b'')
+            if widget is not None:
+                widget_root = root + 'PlugIns/FamilyPairWidget.appex/'
+                archive.writestr(widget_root + 'Info.plist', plistlib.dumps(widget))
+                archive.writestr(widget_root + 'FamilyPairWidget', binary(platform))
             if unsafe:
                 archive.writestr('../outside', b'')
 
@@ -119,6 +123,26 @@ class BuildToolsTests(unittest.TestCase):
             with self.assertRaises(ValueError):
                 inspect(path, simulator=True, app_zip=True)  # Payload wrapper is not the upload ZIP.
             self.assertTrue(inspect(path, simulator=True)['simulator_arm64'])
+
+    def test_widget_requires_installable_bundle_name_on_device_and_simulator(self):
+        widget = dict(CFBundleIdentifier='org.familygram.ios.FamilyPairWidget',
+                      CFBundleName='FamilyGram', CFBundleExecutable='FamilyPairWidget')
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / 'widget.ipa'
+            for simulator in (False, True):
+                params = dict(platform=7 if simulator else 2, simulator=simulator)
+                self.make_ipa(path, widget=widget, **params)
+                inspect(path, simulator=simulator)
+                for invalid in (None, '', '   ', 123):
+                    with self.subTest(simulator=simulator, name=invalid):
+                        broken = dict(widget)
+                        if invalid is None:
+                            broken.pop('CFBundleName')
+                        else:
+                            broken['CFBundleName'] = invalid
+                        self.make_ipa(path, widget=broken, **params)
+                        with self.assertRaisesRegex(ValueError, 'CFBundleName'):
+                            inspect(path, simulator=simulator)
 
     def test_icons_verify_checksums_before_conversion(self):
         with tempfile.TemporaryDirectory() as temporary:

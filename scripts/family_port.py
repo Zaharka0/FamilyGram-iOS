@@ -169,6 +169,7 @@ plist_fragment(
     name = "FamilyPairWidgetInfo",
     extension = "plist",
     template = """
+    <key>CFBundleName</key><string>FamilyGram</string>
     <key>CFBundleDisplayName</key><string>FamilyGram</string>
     <key>NSExtension</key><dict><key>NSExtensionPointIdentifier</key><string>com.apple.widgetkit-extension</string></dict>
     """,

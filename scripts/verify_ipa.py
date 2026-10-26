@@ -73,6 +73,9 @@ def inspect(path, bundle_id='org.familygram.ios', simulator=False, app_zip=False
             extension_info = plistlib.loads(archive.read(extension_root + 'Info.plist'))
             if extension_info.get('CFBundleIdentifier') != bundle_id + '.FamilyPairWidget':
                 raise ValueError('Wrong FamilyGram widget identifier')
+            bundle_name = extension_info.get('CFBundleName')
+            if not isinstance(bundle_name, str) or not bundle_name.strip():
+                raise ValueError('FamilyGram widget requires a non-empty CFBundleName')
             executable_name = extension_info.get('CFBundleExecutable', '')
             if not executable_name or '/' in executable_name:
                 raise ValueError('Invalid widget executable')
