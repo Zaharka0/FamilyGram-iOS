@@ -24,3 +24,32 @@ jobs:
           python3 scripts/patch_rules.py
           python3 scripts/icons.py
           python3 scripts/check_prepared.py
+  swift-core:
+    runs-on: macos-26
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Generate the Android reducer reference ledger
+        run: python3 tests/generate_android_ledger.py
+      - name: Compile and test the real Swift protocol core against Android vectors
+        run: |
+          mkdir -p build
+          swiftc overlay/TelegramUI/FamilyCore.swift overlay/TelegramUI/FamilyReleasePolicy.swift overlay/TelegramUI/FamilyCalendar.swift tests/swift/main.swift -o build/family-core-tests
+          build/family-core-tests tests/fixtures/fg1-android-vectors.json
+      - name: Parse all native Swift overlays
+        run: |
+          for file in overlay/TelegramUI/*.swift overlay/TelegramCore/*.swift overlay/FamilyWidget/*.swift; do
+            xcrun swiftc -frontend -parse "$file"
+          done
+      - name: Parse patched upstream Swift integration points
+        run: |
+          python3 scripts/checkout.py --no-submodules --sparse-check
+          python3 scripts/patch_source.py
+          find source -name '*.swift' -print0 | while IFS= read -r -d '' file; do
+            xcrun swiftc -frontend -parse "$file"
+          done

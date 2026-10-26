@@ -63,8 +63,23 @@ def inspect(path, bundle_id='org.familygram.ios', simulator=False, app_zip=False
         expected = 'iPhoneSimulator' if simulator else 'iPhoneOS'
         if info.get('CFBundleSupportedPlatforms') != [expected]:
             raise ValueError(f'Expected {expected} archive')
-        if any(n.startswith(root + 'PlugIns/') or n.startswith(root + 'Watch/') for n in names):
-            raise ValueError('The initial AltStore build must not include app extensions or Watch apps')
+        if any(n.startswith(root + 'Watch/') for n in names):
+            raise ValueError('Watch apps are not included in the FamilyGram build')
+        extension_names = {n[len(root + 'PlugIns/'):].split('/')[0] for n in names if n.startswith(root + 'PlugIns/') and n != root + 'PlugIns/'}
+        if extension_names - {'FamilyPairWidget.appex'}:
+            raise ValueError('Only the FamilyGram pair widget extension is expected')
+        for extension in extension_names:
+            extension_root = root + 'PlugIns/' + extension + '/'
+            extension_info = plistlib.loads(archive.read(extension_root + 'Info.plist'))
+            if extension_info.get('CFBundleIdentifier') != bundle_id + '.FamilyPairWidget':
+                raise ValueError('Wrong FamilyGram widget identifier')
+            bundle_name = extension_info.get('CFBundleName')
+            if not isinstance(bundle_name, str) or not bundle_name.strip():
+                raise ValueError('FamilyGram widget requires a non-empty CFBundleName')
+            executable_name = extension_info.get('CFBundleExecutable', '')
+            if not executable_name or '/' in executable_name:
+                raise ValueError('Invalid widget executable')
+            arm64_platform(archive.read(extension_root + executable_name), 7 if simulator else 2)
         for icons_key in ('CFBundleIcons', 'CFBundleIcons~ipad'):
             icons = info.get(icons_key, {})
             if not icons.get('CFBundlePrimaryIcon'):

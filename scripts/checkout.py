@@ -23,7 +23,17 @@ def checkout(destination, submodules=True, sparse=False):
                  '/Telegram/Telegram-iOS/*.lproj/InfoPlist.strings',
                  '/submodules/TelegramUI/Sources/AppDelegate.swift',
                  '/submodules/SettingsUI/Sources/Themes/ThemeSettingsAppIconItem.swift',
-                 '/build-system/Make/Make.py'], cwd=destination)
+                 '/build-system/Make/Make.py',
+                 '/submodules/TelegramUI/Sources/TelegramRootController.swift',
+                 '/submodules/TelegramUI/Sources/ChatController.swift',
+                 '/submodules/TelegramUI/Sources/ChatHistoryListNode.swift',
+                 '/submodules/TelegramUI/Sources/Chat/ChatControllerOpenMessageContextMenu.swift',
+                 '/submodules/TelegramUI/Components/Stories/StoryContainerScreen/Sources/OpenStories.swift',
+                 '/submodules/TelegramCore/Sources/TelegramEngine/Messages/TelegramEngineMessages.swift',
+                 '/submodules/TelegramCore/Sources/TelegramEngine/Messages/ApplyMaxReadIndexInteractively.swift',
+                 '/submodules/TelegramCore/Sources/TelegramEngine/Messages/Stories.swift',
+                 '/submodules/TelegramCore/Sources/State/ManagedLocalInputActivities.swift',
+                 '/submodules/TelegramCore/Sources/Account/AccountManager.swift'], cwd=destination)
         run(['git', 'checkout', '--detach', 'FETCH_HEAD'], cwd=destination)
     if submodules:
         run(['git', 'submodule', 'sync', '--recursive'], cwd=destination)

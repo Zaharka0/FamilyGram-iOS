@@ -9,6 +9,7 @@ import tempfile
 from pathlib import Path
 from common import ROOT, MANIFEST, run
 from verify_ipa import inspect
+from python_runtime import install as install_python
 
 
 def package(input_path, output, bundle_id='org.familygram.ios'):
@@ -21,6 +22,7 @@ def package(input_path, output, bundle_id='org.familygram.ios'):
         stage = Path(temporary)
         run(['/usr/bin/ditto', '-x', '-k', input_path, stage])
         app = next((stage / 'Payload').glob('*.app'))
+        install_python(app, simulator=False)
         # Keep the app group: Telegram requires it for its database and passcode store.
         # AltStore reads this ad-hoc signature and replaces IDs/profiles when installing.
         entitlements = {
@@ -35,6 +37,14 @@ def package(input_path, output, bundle_id='org.familygram.ios'):
         nested = list(app.rglob('*.dylib')) + [p for p in app.rglob('*.framework') if p.is_dir()]
         for binary in sorted(nested, key=lambda p: len(p.parts), reverse=True):
             run(['/usr/bin/codesign', '--force', '--sign', '-', '--timestamp=none', binary])
+        for extension in app.glob('PlugIns/*.appex'):
+            info = plistlib.loads((extension / 'Info.plist').read_bytes())
+            widget_entitlements = {'com.apple.security.application-groups': [f'group.{bundle_id}']}
+            widget_entitlements['application-identifier'] = '0000000000.' + info['CFBundleIdentifier']
+            widget_entitlements['com.apple.developer.team-identifier'] = '0000000000'
+            widget_file = stage / 'FamilyWidget.entitlements'
+            widget_file.write_bytes(plistlib.dumps(widget_entitlements))
+            run(['/usr/bin/codesign', '--force', '--sign', '-', '--timestamp=none', '--entitlements', widget_file, extension])
         run(['/usr/bin/codesign', '--force', '--sign', '-', '--timestamp=none',
              '--entitlements', entitlement_path, app])
         run(['/usr/bin/codesign', '--verify', '--deep', '--strict', app])
@@ -48,7 +58,7 @@ def package(input_path, output, bundle_id='org.familygram.ios'):
     output.with_suffix('.ipa.sha256').write_text(f'{digest}  {output.name}\n')
     metadata.update(upstream_commit=MANIFEST['commit'], sha256=digest,
                     signing='ad-hoc; must be re-signed by AltStore',
-                    family_features_ported=False, tested_on_iphone=False)
+                    family_features_ported=True, tested_on_iphone=False)
     output.with_suffix('.json').write_text(json.dumps(metadata, indent=2) + '\n')
     print('FamilyGram.ipa packaged and structurally verified; iPhone installation test is still required.')
 

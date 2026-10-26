@@ -1,5 +1,7 @@
 name: iOS IPA (AltStore)
 on:
+  push:
+    branches: [feature/family-ios]
   workflow_dispatch:
     inputs:
       bundle_id:
@@ -7,11 +9,16 @@ on:
         required: true
         default: org.familygram.ios
         type: string
+      publish_release:
+        description: Publish this successful main build to GitHub Releases for in-app updates
+        required: false
+        default: false
+        type: boolean
 permissions:
   contents: read
 concurrency:
   group: familygram-ios-ipa-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 jobs:
   build:
     runs-on: xcode-27
@@ -29,11 +36,22 @@ jobs:
         env:
           API_ID: ${{ secrets.API_ID }}
           API_HASH: ${{ secrets.API_HASH }}
-          FAMILYGRAM_BUNDLE_ID: ${{ inputs.bundle_id }}
+          FAMILYGRAM_BUNDLE_ID: ${{ inputs.bundle_id || 'org.familygram.ios' }}
         run: python3 scripts/configure.py --bundle-id "$FAMILYGRAM_BUNDLE_ID"
       - name: Check macOS, Xcode and disk space
         run: python3 scripts/preflight.py
       - run: python3 -m pip install -r requirements.txt
+      - name: Restore Bazel compilation cache
+        id: bazel-cache
+        continue-on-error: true
+        uses: actions/cache/restore@v4
+        with:
+          path: build/bazel-cache
+          key: ios-bazel-${{ runner.os }}-${{ hashFiles('upstream.json') }}-${{ hashFiles('overlay/**', 'scripts/**') }}
+          restore-keys: |
+            ios-bazel-${{ runner.os }}-${{ hashFiles('upstream.json') }}-
+      - name: Prepare checksum-verified embedded Python
+        run: python3 scripts/python_runtime.py
       - name: Fetch pinned Telegram source and its submodules
         run: python3 scripts/checkout.py
       - name: Apply FamilyGram branding and AltStore build mode
@@ -45,7 +63,17 @@ jobs:
       - name: Build arm64 release and package for AltStore
         env:
           FAMILYGRAM_BUILD_NUMBER: ${{ github.run_number }}
-        run: python3 scripts/build.py --build-number "$FAMILYGRAM_BUILD_NUMBER"
+        run: |
+          set +e
+          python3 scripts/build.py --build-number "$FAMILYGRAM_BUILD_NUMBER" 2>&1 | tee build.log
+          code=${PIPESTATUS[0]}
+          if [ "$code" != "0" ]; then
+            msg=$(grep -E "^[^ ]+\.swift:[0-9]+:[0-9]+: error" build.log | sort -u | head -60 | cut -c1-500 | sed 's/%/%25/g' | awk 'BEGIN{ORS="%0A"}{print}')
+            echo "::error title=swift-errors::${msg}"
+            msg2=$(grep -E "ERROR:|error:" build.log | grep -v "\.swift:" | sort -u | head -20 | cut -c1-500 | sed 's/%/%25/g' | awk 'BEGIN{ORS="%0A"}{print}')
+            echo "::error title=other-errors::${msg2}"
+          fi
+          exit $code
       - name: Upload IPA and checksum
         uses: actions/upload-artifact@v4
         with:
@@ -53,6 +81,39 @@ jobs:
           path: dist/
           if-no-files-found: error
           retention-days: 14
+      - name: Save reusable Bazel outputs
+        if: always() && steps.bazel-cache.outcome == 'success' && steps.bazel-cache.outputs.cache-hit != 'true'
+        continue-on-error: true
+        uses: actions/cache/save@v4
+        with:
+          path: build/bazel-cache
+          key: ${{ steps.bazel-cache.outputs.cache-primary-key }}
       - name: Remove private configuration
         if: always()
         run: python3 -c "from pathlib import Path; Path('build/configuration.json').unlink(missing_ok=True)"
+  publish:
+    if: github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && inputs.publish_release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: FamilyGram-iOS-AltStore
+          path: dist
+      - name: Validate artifact identity and derive the FamilyGram release tag
+        env:
+          FAMILYGRAM_BUILD_NUMBER: ${{ github.run_number }}
+        run: python3 scripts/release.py
+      - name: Publish the compiled IPA and checksum
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RELEASE_COMMIT: ${{ github.sha }}
+        run: |
+          tag="$(cat dist/release-tag.txt)"
+          gh release create "$tag" dist/FamilyGram.ipa dist/FamilyGram.ipa.sha256 dist/FamilyGram.json --target "$RELEASE_COMMIT" --title "$tag" --notes-file dist/release-notes.md

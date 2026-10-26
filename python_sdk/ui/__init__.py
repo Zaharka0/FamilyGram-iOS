@@ -1,0 +1,1 @@
+"""FamilyGram plugin settings."""
